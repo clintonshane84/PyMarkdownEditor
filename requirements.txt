@@ -1,0 +1,6 @@
+# GUI toolkit
+PyQt6>=6.5
+
+# Markdown rendering and code highlighting
+markdown>=3.6
+pygments>=2.17
