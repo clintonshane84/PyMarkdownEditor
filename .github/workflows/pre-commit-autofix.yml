@@ -3,7 +3,7 @@ name: pre-commit autofix
 on:
   pull_request:
     branches: [ master, development ]
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
 
 permissions:
   contents: write

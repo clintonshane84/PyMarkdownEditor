@@ -5,28 +5,28 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtCore import (
+    QByteArray,
+    QIODevice,
+    QMarginsF,
+    QSaveFile,
+    QSettings,
     Qt,
     QTimer,
-    QSaveFile,
-    QIODevice,
-    QByteArray,
-    QSettings,
-    QMarginsF,
 )
 from PyQt6.QtGui import QAction, QKeySequence, QPageLayout, QPageSize, QTextDocument
+from PyQt6.QtPrintSupport import QPrinter
 from PyQt6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QTextEdit,
-    QTextBrowser,
     QFileDialog,
-    QSplitter,
-    QToolBar,
-    QMessageBox,
-    QStatusBar,
+    QMainWindow,
     QMenu,
+    QMessageBox,
+    QSplitter,
+    QStatusBar,
+    QTextBrowser,
+    QTextEdit,
+    QToolBar,
 )
-from PyQt6.QtPrintSupport import QPrinter
 
 APP_ORG = "QuickTools"
 APP_NAME = "PyQt Markdown Editor"
@@ -39,7 +39,14 @@ MAX_RECENTS = 8
 PREVIEW_CSS = """
 :root { --bg:#ffffff; --fg:#111; --muted:#555; --code:#f4f6f8; --border:#ddd; --link:#0b6bfd; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#a0a4ae; --code:#1a1d24; --border:#2a2f3a; --link:#7aa2ff; }
+  :root {
+    --bg:#0f1115;
+    --fg:#e7e9ee;
+    --muted:#a0a4ae;
+    --code:#1a1d24;
+    --border:#2a2f3a;
+    --link:#7aa2ff;
+  }
 }
 html,body { background:var(--bg); color:var(--fg); }
 body {
@@ -49,7 +56,11 @@ body {
 h1,h2,h3,h4,h5 { margin-top: 1.2em; }
 pre { padding:.75rem; overflow:auto; border-radius:8px; background:var(--code); }
 code { background:var(--code); padding:.15rem .3rem; border-radius:6px; }
-blockquote { border-left:4px solid var(--border); margin:1em 0; padding:.25em .75em; color:var(--muted); }
+blockquote {
+  border-left:4px solid var(--border);
+  margin:1em 0; padding:.25em .75em;
+  color:var(--muted);
+}
 table { border-collapse: collapse; }
 th, td { border:1px solid var(--border); padding:.4rem .6rem; }
 a { color:var(--link); text-decoration:none; }
@@ -86,9 +97,7 @@ class MarkdownEditor(QMainWindow):
         # Widgets
         self.editor = QTextEdit(self)
         self.editor.setAcceptRichText(False)
-        self.editor.setTabStopDistance(
-            4 * self.editor.fontMetrics().horizontalAdvance(" ")
-        )
+        self.editor.setTabStopDistance(4 * self.editor.fontMetrics().horizontalAdvance(" "))
         self.preview = QTextBrowser(self)
         self.preview.setOpenExternalLinks(True)
 
@@ -173,20 +182,12 @@ class MarkdownEditor(QMainWindow):
         self.act_about = QAction("About", self, triggered=self.show_about)
 
         # Basic formatting inserts
-        self.act_bold = QAction(
-            "**B**", self, triggered=lambda: self._surround("**", "**")
-        )
-        self.act_italic = QAction(
-            "*i*", self, triggered=lambda: self._surround("*", "*")
-        )
-        self.act_code = QAction(
-            "`code`", self, triggered=lambda: self._surround("`", "`")
-        )
+        self.act_bold = QAction("**B**", self, triggered=lambda: self._surround("**", "**"))
+        self.act_italic = QAction("*i*", self, triggered=lambda: self._surround("*", "*"))
+        self.act_code = QAction("`code`", self, triggered=lambda: self._surround("`", "`"))
         self.act_h1 = QAction("# H1", self, triggered=lambda: self._prefix_line("# "))
         self.act_h2 = QAction("## H2", self, triggered=lambda: self._prefix_line("## "))
-        self.act_list = QAction(
-            "- list", self, triggered=lambda: self._prefix_line("- ")
-        )
+        self.act_list = QAction("- list", self, triggered=lambda: self._prefix_line("- "))
 
         # Recent files submenu (populated later)
         self.recent_menu = QMenu("Open Recent", self)
@@ -269,9 +270,7 @@ class MarkdownEditor(QMainWindow):
             self.recent_menu.addAction(a)
             return
         for p in self.recent_files[:MAX_RECENTS]:
-            action = QAction(
-                p, self, triggered=lambda chk=False, x=p: self._open_recent(x)
-            )
+            action = QAction(p, self, triggered=lambda chk=False, x=p: self._open_recent(x))
             self.recent_menu.addAction(action)
 
     def _open_recent(self, path_str: str):
@@ -358,11 +357,11 @@ class MarkdownEditor(QMainWindow):
         try:
             sf = QSaveFile(str(path))
             if not sf.open(QIODevice.OpenModeFlag.WriteOnly):
-                raise IOError(f"Cannot open for write: {path}")
+                raise OSError(f"Cannot open for write: {path}")
             data = self.editor.toPlainText().encode("utf-8")
             sf.write(data)
             if not sf.commit():
-                raise IOError(f"Commit failed for: {path}")
+                raise OSError(f"Commit failed for: {path}")
             self._set_modified(False)
             self.statusBar().showMessage(f"Saved: {path}", 3000)
             return True
@@ -386,13 +385,9 @@ class MarkdownEditor(QMainWindow):
     def export_pdf(self):
         # Choose output path
         default_name = (
-            self.current_path.with_suffix(".pdf").name
-            if self.current_path
-            else "document.pdf"
+            self.current_path.with_suffix(".pdf").name if self.current_path else "document.pdf"
         )
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export PDF", default_name, "PDF (*.pdf)"
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Export PDF", default_name, "PDF (*.pdf)")
         if not path:
             return
 
@@ -454,9 +449,7 @@ class MarkdownEditor(QMainWindow):
 
     # ---------- Editor helpers ----------
     def toggle_wrap(self, on: bool):
-        mode = (
-            QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
-        )
+        mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
         self.editor.setLineWrapMode(mode)
 
     def toggle_preview(self, on: bool):
@@ -466,9 +459,7 @@ class MarkdownEditor(QMainWindow):
         cursor = self.editor.textCursor()
         if not cursor.hasSelection():
             cursor.insertText(left + right)
-            cursor.movePosition(
-                cursor.MoveOperation.Left, cursor.MoveMode.MoveAnchor, len(right)
-            )
+            cursor.movePosition(cursor.MoveOperation.Left, cursor.MoveMode.MoveAnchor, len(right))
             self.editor.setTextCursor(cursor)
             return
         text = cursor.selectedText()

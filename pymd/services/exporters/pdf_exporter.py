@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 from pathlib import Path
-from PyQt6.QtGui import QTextDocument, QPageLayout, QPageSize
-from PyQt6.QtPrintSupport import QPrinter
+
 from PyQt6.QtCore import QMarginsF
+from PyQt6.QtGui import QPageLayout, QPageSize, QTextDocument
+from PyQt6.QtPrintSupport import QPrinter
 
 from pymd.domain.interfaces import IExporter
 

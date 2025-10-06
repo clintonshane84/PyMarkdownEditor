@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import sys
+
 from pymd.app import run_app
 
 

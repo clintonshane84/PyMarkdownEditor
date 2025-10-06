@@ -1,5 +1,7 @@
 from __future__ import annotations
-from typing import Dict, List
+
+from typing import ClassVar
+
 from pymd.domain.interfaces import IExporter
 
 
@@ -9,7 +11,7 @@ class ExporterRegistry:
     UI can iterate over `all()` to build dynamic export menus.
     """
 
-    _registry: Dict[str, IExporter] = {}
+    _registry: ClassVar[dict[str, IExporter]] = {}
 
     @classmethod
     def register(cls, exporter: IExporter) -> None:
@@ -20,5 +22,5 @@ class ExporterRegistry:
         return cls._registry[name]
 
     @classmethod
-    def all(cls) -> List[IExporter]:
+    def all(cls) -> list[IExporter]:
         return list(cls._registry.values())

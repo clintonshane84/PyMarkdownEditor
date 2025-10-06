@@ -1,12 +1,13 @@
 from __future__ import annotations
-import pytest
 
-from pymd.ui.main_window import MainWindow
-from pymd.services.markdown_renderer import MarkdownRenderer
-from pymd.services.file_service import FileService
-from pymd.services.settings_service import SettingsService
+import pytest
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMessageBox, QTextEdit
+
+from pymd.services.file_service import FileService
+from pymd.services.markdown_renderer import MarkdownRenderer
+from pymd.services.settings_service import SettingsService
+from pymd.ui.main_window import MainWindow
 
 
 @pytest.fixture()
@@ -49,11 +50,9 @@ def test_window_open_save_cycle(tmp_path, window: MainWindow):
 def test_window_write_failure_shows_error(monkeypatch, tmp_path, window: MainWindow):
     # Simulate write failure in FileService
     def boom(path, text):
-        raise IOError("disk full")
+        raise OSError("disk full")
 
-    monkeypatch.setattr(
-        type(window.file_service), "write_text_atomic", boom, raising=False
-    )
+    monkeypatch.setattr(type(window.file_service), "write_text_atomic", boom, raising=False)
     assert window._write_to(tmp_path / "bad.md") is False
 
 
@@ -68,9 +67,9 @@ def test_window_export_html_pdf(tmp_path, window: MainWindow):
 
     html = window.renderer.to_html("# T")
     exps["html"].export(html, html_out)
-    assert html_out.exists() and html_out.read_text(
-        encoding="utf-8"
-    ).lower().startswith("<!doctype")
+    assert html_out.exists() and html_out.read_text(encoding="utf-8").lower().startswith(
+        "<!doctype"
+    )
 
     from PyQt6.QtWidgets import QApplication
 
@@ -87,17 +86,13 @@ def test_window_recents_persist(window: MainWindow, tmp_path):
 
 
 def test_window_confirm_discard_negative(window: MainWindow, monkeypatch):
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No
-    )
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No)
     window.doc.modified = True
     assert window._confirm_discard() is False
 
 
 def test_window_confirm_discard_positive(window: MainWindow, monkeypatch):
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
-    )
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
     window.doc.modified = True
     assert window._confirm_discard() is True
 
