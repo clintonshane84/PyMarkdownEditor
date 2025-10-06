@@ -1,0 +1,16 @@
+"""App constants and utilities."""
+from .constants import (
+    APP_ORG, APP_NAME, CSS_PREVIEW, HTML_TEMPLATE,
+    SETTINGS_GEOMETRY, SETTINGS_SPLITTER, SETTINGS_RECENTS, MAX_RECENTS,
+)
+
+__all__ = [
+    "APP_ORG",
+    "APP_NAME",
+    "CSS_PREVIEW",
+    "HTML_TEMPLATE",
+    "SETTINGS_GEOMETRY",
+    "SETTINGS_SPLITTER",
+    "SETTINGS_RECENTS",
+    "MAX_RECENTS",
+]
