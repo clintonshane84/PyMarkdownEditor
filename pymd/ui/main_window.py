@@ -1,23 +1,23 @@
 from __future__ import annotations
-from pathlib import Path
-from typing import Optional
 
-from PyQt6.QtCore import Qt, QByteArray
+from pathlib import Path
+
+from PyQt6.QtCore import QByteArray, Qt
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (
-    QMainWindow,
-    QTextEdit,
-    QTextBrowser,
     QFileDialog,
-    QSplitter,
-    QToolBar,
-    QMessageBox,
-    QStatusBar,
+    QMainWindow,
     QMenu,
+    QMessageBox,
+    QSplitter,
+    QStatusBar,
+    QTextBrowser,
+    QTextEdit,
+    QToolBar,
 )
 
+from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
 from pymd.domain.models import Document
-from pymd.domain.interfaces import IMarkdownRenderer, IFileService, ISettingsService
 from pymd.services.exporters.base import ExporterRegistry
 from pymd.utils.constants import MAX_RECENTS
 
@@ -30,7 +30,7 @@ class MainWindow(QMainWindow):
         renderer: IMarkdownRenderer,
         file_service: IFileService,
         settings: ISettingsService,
-        start_path: Optional[Path] = None,
+        start_path: Path | None = None,
         app_title: str = "PyMarkdownEditor",
     ) -> None:
         super().__init__()
@@ -47,9 +47,7 @@ class MainWindow(QMainWindow):
         # Widgets
         self.editor = QTextEdit(self)
         self.editor.setAcceptRichText(False)
-        self.editor.setTabStopDistance(
-            4 * self.editor.fontMetrics().horizontalAdvance(" ")
-        )
+        self.editor.setTabStopDistance(4 * self.editor.fontMetrics().horizontalAdvance(" "))
         self.preview = QTextBrowser(self)
         self.preview.setOpenExternalLinks(True)
 
@@ -72,10 +70,10 @@ class MainWindow(QMainWindow):
 
         # Restore UI state
         geo = self.settings.get_geometry()
-        if isinstance(geo, (bytes, bytearray)):
+        if isinstance(geo, bytes | bytearray):
             self.restoreGeometry(QByteArray(geo))
         split = self.settings.get_splitter()
-        if isinstance(split, (bytes, bytearray)):
+        if isinstance(split, bytes | bytearray):
             self.splitter.restoreState(QByteArray(split))
 
         # Load starting content
@@ -172,9 +170,7 @@ class MainWindow(QMainWindow):
             return
         for p in self.recents[:MAX_RECENTS]:
             self.recent_menu.addAction(
-                QAction(
-                    p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x))
-                )
+                QAction(p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x)))
             )
 
     # ---------- Actions ----------
@@ -254,18 +250,14 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(
-                f"Exported {exporter.name.upper()}: {out_str}", 3000
-            )
+            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
         except Exception as e:
             QMessageBox.critical(
                 self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
             )
 
     def _toggle_wrap(self, on: bool):
-        mode = (
-            QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
-        )
+        mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
         self.editor.setLineWrapMode(mode)
 
     def _toggle_preview(self, on: bool):

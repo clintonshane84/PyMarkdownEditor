@@ -1,12 +1,13 @@
 from __future__ import annotations
-from pathlib import Path
-import pytest
 
+from pathlib import Path
+
+import pytest
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 
-from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.file_service import FileService
+from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
 
 

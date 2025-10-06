@@ -1,0 +1,9 @@
+# Normalize text files; keep LF in repo, convert on checkout per OS
+* text=auto
+
+# Always treat these as text with LF
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+*.toml text eol=lf

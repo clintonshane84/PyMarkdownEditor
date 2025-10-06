@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from PyQt6.QtWidgets import QApplication
 
 from pymd.di.container import Container
 from pymd.ui.main_window import MainWindow
-from pymd.utils.constants import APP_ORG, APP_NAME
+from pymd.utils.constants import APP_NAME, APP_ORG
 
 
 def run_app(argv: list[str]) -> int:

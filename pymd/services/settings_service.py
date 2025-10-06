@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Iterable
-from PyQt6.QtCore import QSettings, QByteArray
+
+from collections.abc import Iterable
+
+from PyQt6.QtCore import QByteArray, QSettings
 
 from pymd.domain.interfaces import ISettingsService
-from pymd.utils.constants import SETTINGS_GEOMETRY, SETTINGS_SPLITTER, SETTINGS_RECENTS
+from pymd.utils.constants import SETTINGS_GEOMETRY, SETTINGS_RECENTS, SETTINGS_SPLITTER
 
 
 class SettingsService(ISettingsService):

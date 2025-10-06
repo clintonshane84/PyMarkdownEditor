@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from pathlib import Path
-from PyQt6.QtCore import QSaveFile, QIODevice
+
+from PyQt6.QtCore import QIODevice, QSaveFile
 
 from pymd.domain.interfaces import IFileService
 
@@ -14,7 +16,7 @@ class FileService(IFileService):
     def write_text_atomic(self, path: Path, text: str) -> None:
         sf = QSaveFile(str(path))
         if not sf.open(QIODevice.OpenModeFlag.WriteOnly):
-            raise IOError(f"Cannot open for write: {path}")
+            raise OSError(f"Cannot open for write: {path}")
         sf.write(text.encode("utf-8"))
         if not sf.commit():
-            raise IOError(f"Commit failed for: {path}")
+            raise OSError(f"Commit failed for: {path}")

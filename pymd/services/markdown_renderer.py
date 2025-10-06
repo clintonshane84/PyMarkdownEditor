@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import markdown
 
 from pymd.domain.interfaces import IMarkdownRenderer

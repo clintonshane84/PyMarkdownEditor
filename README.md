@@ -1,7 +1,7 @@
 # PyMarkdownEditor
 
 A fast, minimal **PyQt6** Markdown editor with live preview, HTML/PDF export, and a clean, SOLID-friendly architecture.  
-Owner-led governance; contributions welcome (see [CONTRIBUTIONS](CONTRIBUTIONS.md)).
+Owner-led governance; contributions welcome (see [CONTRIBUTIONS](CONTRIBUTING.md)).
 
 ![PyMarkdownEditor](docs/screenshot.png)
 

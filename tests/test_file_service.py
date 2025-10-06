@@ -1,4 +1,5 @@
 import pytest
+
 from pymd.services.file_service import FileService
 
 
@@ -26,9 +27,7 @@ def test_file_service_write_atomic_open_fail(monkeypatch, tmp_path):
 
     fs = FileService()
     p = tmp_path / "x.md"
-    monkeypatch.setattr(
-        "pymd.services.file_service.QSaveFile", FakeQSaveFile, raising=True
-    )
+    monkeypatch.setattr("pymd.services.file_service.QSaveFile", FakeQSaveFile, raising=True)
     with pytest.raises(IOError):
         fs.write_text_atomic(p, "data")
 
@@ -49,8 +48,6 @@ def test_file_service_write_atomic_commit_fail(monkeypatch, tmp_path):
 
     fs = FileService()
     p = tmp_path / "x.md"
-    monkeypatch.setattr(
-        "pymd.services.file_service.QSaveFile", FakeQSaveFile, raising=True
-    )
+    monkeypatch.setattr("pymd.services.file_service.QSaveFile", FakeQSaveFile, raising=True)
     with pytest.raises(IOError):
         fs.write_text_atomic(p, "data")
