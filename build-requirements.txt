@@ -1,0 +1,4 @@
+pyinstaller>=6.10
+# Optional: speed up PyInstaller collection on CI
+setuptools>=70.0
+wheel>=0.43

@@ -1,26 +1,28 @@
 # Contributions Guide
 
-Thanks for your interest in contributing to **PyMarkdownEditor**!  
-This project is open source and welcomes bug reports, ideas, and code contributions.
+Thanks for your interest in contributing to **PyMarkdownEditor**!
+This project is open source and welcomes issues and PRs.
 
-> **Governance:** The project is **owner-led**. The initial Code Owner is **YOU** (replace with your name/handle).  
+> **Governance:** The project is **owner-led**. The initial Code Owner is **YOU** (replace below).
 > Additional Code Owners may be added over time. **All merges require Code Owner approval.**
+
+- License: **Apache-2.0** (`LICENSE`)
+- Code Owners: see `.github/CODEOWNERS`
+- PR Template: `.github/pull_request_template.md`
 
 ---
 
 ## Table of Contents
 - [Code of Conduct](#code-of-conduct)
 - [Governance & Decision Making](#governance--decision-making)
+- [Status Checks (CI)](#status-checks-ci)
 - [Before You Start](#before-you-start)
 - [Development Setup](#development-setup)
 - [Project Structure](#project-structure)
-- [Issue Reporting](#issue-reporting)
-- [Proposing Changes](#proposing-changes)
 - [Branching & Commits](#branching--commits)
 - [Testing & Quality Gates](#testing--quality-gates)
 - [Documentation](#documentation)
-- [Pull Request Checklist](#pull-request-checklist)
-- [Review & Merge Process](#review--merge-process)
+- [Pull Request Process](#pull-request-process)
 - [Security](#security)
 - [Releases](#releases)
 - [License & Ownership](#license--ownership)
@@ -29,24 +31,54 @@ This project is open source and welcomes bug reports, ideas, and code contributi
 ---
 
 ## Code of Conduct
-We follow the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).  
-By participating, you agree to uphold this code. If you observe unacceptable behavior, please report it privately (see [Security](#security)).
+We follow the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+By participating, you agree to uphold this code.
 
 ---
 
 ## Governance & Decision Making
-- **Code Owners**: Approve/merge PRs, set roadmap, cut releases.
-- **Maintainers**: Triage issues, review PRs, help with releases (as delegated).
-- **Contributors**: Everyone submitting issues/PRs.
+- **Code Owners**: approve/merge PRs, set roadmap, cut releases.
+- **Maintainers**: triage issues, review PRs (as delegated).
+- **Contributors**: everyone submitting issues/PRs.
 
 > A PR **must** be approved by a Code Owner to be merged.
 
 ---
 
+## Status Checks (CI)
+
+All PRs must pass automated checks (see `.github/workflows/`):
+
+1. **Ruff Format (check)** — `ruff format --check .`
+2. **Ruff Lint** — `ruff check .` (imports, pyflakes, pycodestyle, bugbear, pyupgrade)
+3. **Tests** — `pytest` (Qt runs headless: `QT_QPA_PLATFORM=offscreen`)
+   Coverage is reported to the console.
+4. **(Optional) Pre-commit Autofix** — for PR branches **within this repo**, a bot may push formatting fixes
+
+**Workflows:**
+- CI: `.github/workflows/ci.yml` (runs on push & PR to `main`/`develop`)
+- Autofix: `.github/workflows/pre-commit-autofix.yml` (optional; formatting only)
+- Release binaries: `.github/workflows/release-binaries.yml` (on tag `v*.*.*`)
+
+**Local pre-commit (recommended):**
+```bash
+pip install -r dev-requirements.txt
+pre-commit install
+pre-commit run --all-files
+````
+
+If CI fails on formatting only, either:
+
+* run `pre-commit` locally and push, or
+* wait for the **autofix** workflow to push a formatting commit (repo branches only).
+
+---
+
 ## Before You Start
-- For **non-trivial changes**, please open an **issue** first to discuss direction.
-- For **small fixes** (docs, typos, trivial refactors), you can go straight to a PR.
-- If your change impacts public API, UX, or architecture, an approved issue or design sketch is required.
+
+* For **non-trivial changes**, please open an **issue** to discuss direction.
+* For **small fixes** (docs, typos, trivial refactors), you may open a PR directly.
+* For API/UX/architectural changes, please include a brief design sketch in the issue.
 
 ---
 
@@ -61,12 +93,6 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 pip install -r dev-requirements.txt
-````
-
-Run tests & coverage:
-
-```bash
-pytest --cov=pymd --cov-report=term-missing
 ```
 
 Run the app:
@@ -75,9 +101,13 @@ Run the app:
 python -m pymd
 ```
 
-Recommended (optional):
+Run tests:
 
-* Lint/format via `ruff` or `black` + `ruff` (`pip install ruff black`).
+```bash
+pytest --cov=pymd --cov-report=term-missing
+```
+
+**Optional tools:** `ruff`, `black`, `pyinstaller`.
 
 ---
 
@@ -90,75 +120,58 @@ pymd/
   main.py
   app.py
   di/
+    container.py
   domain/
+    interfaces.py
+    models.py
   services/
+    markdown_renderer.py
+    file_service.py
+    settings_service.py
     exporters/
+      base.py
+      html_exporter.py
+      pdf_exporter.py
   ui/
+    main_window.py
   utils/
+    constants.py
 tests/
 ```
 
-* **SOLID-friendly** design with interfaces in `domain/` and DI in `di/`.
-* Export strategies (HTML/PDF) live in `services/exporters/` (Open/Closed Principle).
-* Qt UI in `ui/` is thin; business logic lives in services.
-
----
-
-## Issue Reporting
-
-Please include:
-
-* Expected vs actual behavior
-* Steps to reproduce
-* Environment (OS, Python, PyQt, commit SHA)
-* Logs/screenshots if relevant
-* For feature requests: Why it’s needed, alternatives considered, scope
-
-Use labels if available (bug, feature, docs, help wanted).
-
----
-
-## Proposing Changes
-
-1. **Discuss** substantial work in an issue first.
-2. **Design**: brief plan if touching architecture, DI, or interfaces.
-3. **Scope**: keep PRs small, focused, and reviewable.
-4. **Tests**: add unit tests (positive & negative paths).
-5. **Docs**: update README/CONTRIBUTIONS/CHANGELOG if user-visible changes.
+* **SOLID & DI**: interfaces in `domain/`, wiring in `di/container.py`
+* **Exporters** follow the strategy pattern and a registry (Open/Closed Principle)
+* UI in `ui/` is thin and delegates to services
 
 ---
 
 ## Branching & Commits
 
 * Branch from `main`:
-
-  * `feat/<short-topic>`
-  * `fix/<short-topic>`
-  * `docs/<short-topic>`
-  * `chore/<short-topic>`
+  `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`, `chore/<short-name>`
 * Commit style (suggested):
 
   * `feat: add pdf exporter margins`
   * `fix: handle QSaveFile commit failure`
-  * `test: add negative path for exporter`
+  * `test: negative path for QTextDocument.print`
 * **DCO sign-off** required (or CLA if requested):
 
   ```bash
   git commit -s -m "feat: add exporter"
   ```
 
-  This appends: `Signed-off-by: Your Name <email>`
+  This adds: `Signed-off-by: Your Name <email>`
 
 ---
 
 ## Testing & Quality Gates
 
-* Use **pytest**; keep tests deterministic and fast.
-* Cover both **happy paths** and **failure modes** (e.g., IO errors, Qt print errors, missing exporters).
-* Target **≥90% coverage** for new/changed code; don’t regress overall coverage.
-* Avoid GUI modal interactions in tests—call internal helpers or monkeypatch dialogs.
+* Use **pytest**; keep tests deterministic & fast.
+* Include **positive + negative** paths (I/O failures, print errors, unknown exporters, etc.).
+* Target **≥90% coverage** for new/changed code; don’t regress overall.
+* Avoid modal dialogs in tests; use internal helpers or monkeypatch.
 
-**Run:**
+Run:
 
 ```bash
 pytest -q
@@ -169,60 +182,57 @@ pytest --cov=pymd --cov-report=term-missing
 
 ## Documentation
 
-* Public behaviors, CLI flags, or UI changes → update **README.md**.
-* Architectural or design updates → add short notes to **CONTRIBUTIONS.md** or a `/docs` page.
-* Add docstrings to public classes/interfaces.
+* User-visible changes → update **README.md** and **CHANGELOG.md**.
+* Architectural changes → brief notes in **CONTRIBUTIONS.md** or `docs/`.
+* Add docstrings for public classes/interfaces.
 
 ---
 
-## Pull Request Checklist
+## Pull Request Process
 
-* [ ] Issue linked (if needed) and description explains **why** & **what**
-* [ ] Small, focused changes; unrelated refactors split out
-* [ ] Tests added/updated (positive + negative)
-* [ ] `pytest` passes locally
-* [ ] Coverage maintained or improved
-* [ ] Docs updated (README/CHANGELOG) if user-visible
-* [ ] Commits signed off with **DCO** (`-s`)
-* [ ] No secrets, PII, or license-incompatible code included
+1. Use the PR template (`.github/pull_request_template.md`).
+2. Link the related issue if applicable; explain **why** + **what**.
+3. Keep PRs small & focused.
+4. Add/update tests and docs.
+5. Ensure **CI is green** (format/lint/tests).
+6. A **Code Owner** reviews and merges (squash preferred).
 
----
+**Reviewers look for:**
 
-## Review & Merge Process
-
-* A Code Owner reviews for:
-
-  * Architectural fit (SOLID, DI, interfaces)
-  * Safety (error handling, UI blocking, thread affinity in Qt)
-  * Tests & coverage
-  * Maintainability (naming, size, clarity)
-* Address feedback with follow-up commits (keep them tidy).
-* **Squash merge** preferred; Code Owner presses the button.
+* SOLID/DI alignment, exporter strategy consistency
+* Good error handling (Qt threading/printing/IO edge cases)
+* Tests cover happy and failure paths
+* Maintainable code (naming, small units, clarity)
 
 ---
 
 ## Security
 
-If you believe you’ve found a security issue:
+If you suspect a security issue:
 
 * **Do not** open a public issue.
-* DM the Code Owner on Github, username: **clintonshane84**.
-* We will acknowledge within 72 hours and work on a fix depending on availability. This is not guarenteed and serves as a general guideline only.
+* Email: **security@[your-domain]** (replace), or DM the current Code Owner.
+* We’ll acknowledge within 72 hours and work on a fix.
 
 ---
 
 ## Releases
 
-* Version set in `pymd/__init__.py`.
-* Update `CHANGELOG.md` (Keep a Changelog style recommended).
-* Tag release: `vX.Y.Z`.
-* Prepare binaries (optional: PyInstaller), publish GitHub Release.
+* Version is set in `pymd/__init__.py` (follow **SemVer**).
+* Update `CHANGELOG.md`.
+* Create a tag `vX.Y.Z` and push:
+
+  ```bash
+  git tag v0.1.0
+  git push origin v0.1.0
+  ```
+* The **Release binaries workflow** builds PyInstaller artifacts for Windows/macOS/Linux and attaches them to the GitHub Release. See `docs/RELEASING.md`.
 
 ---
 
 ## License & Ownership
 
-* Licensed under **Apache-2.0** (see `LICENSE`).
+* Licensed under **Apache-2.0** (`LICENSE`).
 * Contributions are accepted under the same license.
 * The Code Owner retains repository administrative control; new Code Owners may be added over time.
 
@@ -231,7 +241,5 @@ If you believe you’ve found a security issue:
 ## Contact
 
 * General: open an issue
-* Security: **TBC**
+* Security: Send a Github DM to username **@clintonshane84**
 * Current Code Owner: **Clinton Wright / @clintonshane84**
-
-Thanks again for helping make PyMarkdownEditor better! 🎉

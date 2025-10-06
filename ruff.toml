@@ -1,0 +1,28 @@
+# Ruff configuration (combines isort + pycodestyle + pyflakes + more)
+line-length = 100
+target-version = "py311"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[lint]
+select = [
+  "E", "F", "I",     # pycodestyle/pyflakes/imports
+  "UP",              # pyupgrade
+  "B",               # bugbear
+  "W",               # warnings
+  "RUF",             # ruff rules
+]
+ignore = [
+  # Add any rule codes to ignore here if needed.
+]
+
+[lint.isort]
+# Keep 3rd-party vs first-party sections clean
+known-first-party = ["pymd", "tests"]
+
+[lint.per-file-ignores]
+# Tests can be a bit looser
+"tests/**" = ["S101"]  # allow asserts
