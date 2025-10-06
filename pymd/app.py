@@ -1,11 +1,11 @@
 from __future__ import annotations
-import sys
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 
 from pymd.di.container import Container
 from pymd.ui.main_window import MainWindow
 from pymd.utils.constants import APP_ORG, APP_NAME
+
 
 def run_app(argv: list[str]) -> int:
     """Bootstraps Qt, builds dependencies, and launches the main window."""

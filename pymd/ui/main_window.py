@@ -5,14 +5,22 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QByteArray
 from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (
-    QMainWindow, QTextEdit, QTextBrowser, QFileDialog, QSplitter, QToolBar, QMessageBox,
-    QStatusBar, QMenu
+    QMainWindow,
+    QTextEdit,
+    QTextBrowser,
+    QFileDialog,
+    QSplitter,
+    QToolBar,
+    QMessageBox,
+    QStatusBar,
+    QMenu,
 )
 
 from pymd.domain.models import Document
 from pymd.domain.interfaces import IMarkdownRenderer, IFileService, ISettingsService
 from pymd.services.exporters.base import ExporterRegistry
 from pymd.utils.constants import MAX_RECENTS
+
 
 class MainWindow(QMainWindow):
     """Thin PyQt window that delegates work to injected services (DIP)."""
@@ -39,7 +47,9 @@ class MainWindow(QMainWindow):
         # Widgets
         self.editor = QTextEdit(self)
         self.editor.setAcceptRichText(False)
-        self.editor.setTabStopDistance(4 * self.editor.fontMetrics().horizontalAdvance(' '))
+        self.editor.setTabStopDistance(
+            4 * self.editor.fontMetrics().horizontalAdvance(" ")
+        )
         self.preview = QTextBrowser(self)
         self.preview.setOpenExternalLinks(True)
 
@@ -79,17 +89,47 @@ class MainWindow(QMainWindow):
 
     # ---------- UI creation ----------
     def _build_actions(self):
-        self.act_new = QAction("New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file)
-        self.act_open = QAction("Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog)
-        self.act_save = QAction("Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save)
-        self.act_save_as = QAction("Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as)
-        self.act_toggle_wrap = QAction("Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap)
-        self.act_toggle_preview = QAction("Toggle Preview", self, checkable=True, checked=True, triggered=self._toggle_preview)
+        self.act_new = QAction(
+            "New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file
+        )
+        self.act_open = QAction(
+            "Open…",
+            self,
+            shortcut=QKeySequence.StandardKey.Open,
+            triggered=self._open_dialog,
+        )
+        self.act_save = QAction(
+            "Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save
+        )
+        self.act_save_as = QAction(
+            "Save As…",
+            self,
+            shortcut=QKeySequence.StandardKey.SaveAs,
+            triggered=self._save_as,
+        )
+        self.act_toggle_wrap = QAction(
+            "Toggle Wrap",
+            self,
+            checkable=True,
+            checked=True,
+            triggered=self._toggle_wrap,
+        )
+        self.act_toggle_preview = QAction(
+            "Toggle Preview",
+            self,
+            checkable=True,
+            checked=True,
+            triggered=self._toggle_preview,
+        )
 
         # Export actions from registry
         self.export_actions: list[QAction] = []
         for exporter in ExporterRegistry.all():
-            act = QAction(exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e))
+            act = QAction(
+                exporter.label,
+                self,
+                triggered=lambda chk=False, e=exporter: self._export_with(e),
+            )
             self.export_actions.append(act)
 
         self.recent_menu = QMenu("Open Recent", self)
@@ -126,15 +166,21 @@ class MainWindow(QMainWindow):
     def _refresh_recent_menu(self):
         self.recent_menu.clear()
         if not self.recents:
-            na = QAction("(empty)", self); na.setEnabled(False)
+            na = QAction("(empty)", self)
+            na.setEnabled(False)
             self.recent_menu.addAction(na)
             return
         for p in self.recents[:MAX_RECENTS]:
-            self.recent_menu.addAction(QAction(p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x))))
+            self.recent_menu.addAction(
+                QAction(
+                    p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x))
+                )
+            )
 
     # ---------- Actions ----------
     def _new_file(self):
-        if not self._confirm_discard(): return
+        if not self._confirm_discard():
+            return
         self.doc = Document(path=None, text="", modified=False)
         self.editor.setPlainText("")
         self._update_title()
@@ -142,13 +188,17 @@ class MainWindow(QMainWindow):
 
     def _open_dialog(self):
         path_str, _ = QFileDialog.getOpenFileName(
-            self, "Open Markdown", "", "Markdown (*.md *.markdown *.mdown);;Text (*.txt);;All files (*)"
+            self,
+            "Open Markdown",
+            "",
+            "Markdown (*.md *.markdown *.mdown);;Text (*.txt);;All files (*)",
         )
         if path_str:
             self._open_path(Path(path_str))
 
     def _open_path(self, path: Path):
-        if not self._confirm_discard(): return
+        if not self._confirm_discard():
+            return
         try:
             text = self.file_service.read_text(path)
         except Exception as e:
@@ -168,7 +218,9 @@ class MainWindow(QMainWindow):
 
     def _save_as(self):
         start = str(self.doc.path) if self.doc.path else ""
-        path_str, _ = QFileDialog.getSaveFileName(self, "Save As", start, "Markdown (*.md);;All files (*)")
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Save As", start, "Markdown (*.md);;All files (*)"
+        )
         if not path_str:
             return
         path = Path(path_str)
@@ -190,8 +242,11 @@ class MainWindow(QMainWindow):
 
     def _export_with(self, exporter):
         # choose output file
-        default = (self.doc.path.with_suffix(f".{exporter.name}").name if self.doc.path
-                   else f"document.{exporter.name}")
+        default = (
+            self.doc.path.with_suffix(f".{exporter.name}").name
+            if self.doc.path
+            else f"document.{exporter.name}"
+        )
         filt = f"{exporter.name.upper()} (*.{exporter.name})"
         out_str, _ = QFileDialog.getSaveFileName(self, exporter.label, default, filt)
         if not out_str:
@@ -199,12 +254,18 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
+            self.statusBar().showMessage(
+                f"Exported {exporter.name.upper()}: {out_str}", 3000
+            )
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}")
+            QMessageBox.critical(
+                self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
+            )
 
     def _toggle_wrap(self, on: bool):
-        mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
+        mode = (
+            QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
+        )
         self.editor.setLineWrapMode(mode)
 
     def _toggle_preview(self, on: bool):
@@ -229,7 +290,8 @@ class MainWindow(QMainWindow):
         if not self.doc.modified:
             return True
         resp = QMessageBox.question(
-            self, "Discard changes?",
+            self,
+            "Discard changes?",
             "You have unsaved changes. Discard them?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )

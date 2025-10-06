@@ -4,11 +4,27 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, QSaveFile, QIODevice, QByteArray, QSettings, QMarginsF
+from PyQt6.QtCore import (
+    Qt,
+    QTimer,
+    QSaveFile,
+    QIODevice,
+    QByteArray,
+    QSettings,
+    QMarginsF,
+)
 from PyQt6.QtGui import QAction, QKeySequence, QPageLayout, QPageSize, QTextDocument
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QTextEdit, QTextBrowser,
-    QFileDialog, QSplitter, QToolBar, QMessageBox, QStatusBar, QMenu
+    QApplication,
+    QMainWindow,
+    QTextEdit,
+    QTextBrowser,
+    QFileDialog,
+    QSplitter,
+    QToolBar,
+    QMessageBox,
+    QStatusBar,
+    QMenu,
 )
 from PyQt6.QtPrintSupport import QPrinter
 
@@ -70,7 +86,9 @@ class MarkdownEditor(QMainWindow):
         # Widgets
         self.editor = QTextEdit(self)
         self.editor.setAcceptRichText(False)
-        self.editor.setTabStopDistance(4 * self.editor.fontMetrics().horizontalAdvance(' '))
+        self.editor.setTabStopDistance(
+            4 * self.editor.fontMetrics().horizontalAdvance(" ")
+        )
         self.preview = QTextBrowser(self)
         self.preview.setOpenExternalLinks(True)
 
@@ -111,34 +129,64 @@ class MarkdownEditor(QMainWindow):
 
     # ---------- UI Builders ----------
     def _build_actions(self):
-        self.act_new = QAction("New", self, shortcut=QKeySequence.StandardKey.New,
-                               triggered=self.new_file)
-        self.act_open = QAction("Open…", self, shortcut=QKeySequence.StandardKey.Open,
-                                triggered=self.open_dialog)
-        self.act_save = QAction("Save", self, shortcut=QKeySequence.StandardKey.Save,
-                                triggered=self.save)
-        self.act_save_as = QAction("Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs,
-                                   triggered=self.save_as)
+        self.act_new = QAction(
+            "New", self, shortcut=QKeySequence.StandardKey.New, triggered=self.new_file
+        )
+        self.act_open = QAction(
+            "Open…",
+            self,
+            shortcut=QKeySequence.StandardKey.Open,
+            triggered=self.open_dialog,
+        )
+        self.act_save = QAction(
+            "Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self.save
+        )
+        self.act_save_as = QAction(
+            "Save As…",
+            self,
+            shortcut=QKeySequence.StandardKey.SaveAs,
+            triggered=self.save_as,
+        )
         self.act_export_html = QAction("Export HTML…", self, triggered=self.export_html)
         self.act_export_pdf = QAction("Export PDF…", self, triggered=self.export_pdf)
-        self.act_quit = QAction("Quit", self, shortcut=QKeySequence.StandardKey.Quit,
-                                triggered=self.close)
+        self.act_quit = QAction(
+            "Quit", self, shortcut=QKeySequence.StandardKey.Quit, triggered=self.close
+        )
 
-        self.act_wrap = QAction("Toggle Wrap", self, checkable=True, checked=True,
-                                triggered=self.toggle_wrap)
-        self.act_preview = QAction("Toggle Preview", self, checkable=True, checked=True,
-                                   triggered=self.toggle_preview)
-        self.act_reload = QAction("Re-render", self, shortcut="Ctrl+R",
-                                  triggered=self.render_preview)
+        self.act_wrap = QAction(
+            "Toggle Wrap",
+            self,
+            checkable=True,
+            checked=True,
+            triggered=self.toggle_wrap,
+        )
+        self.act_preview = QAction(
+            "Toggle Preview",
+            self,
+            checkable=True,
+            checked=True,
+            triggered=self.toggle_preview,
+        )
+        self.act_reload = QAction(
+            "Re-render", self, shortcut="Ctrl+R", triggered=self.render_preview
+        )
         self.act_about = QAction("About", self, triggered=self.show_about)
 
         # Basic formatting inserts
-        self.act_bold = QAction("**B**", self, triggered=lambda: self._surround("**", "**"))
-        self.act_italic = QAction("*i*", self, triggered=lambda: self._surround("*", "*"))
-        self.act_code = QAction("`code`", self, triggered=lambda: self._surround("`", "`"))
+        self.act_bold = QAction(
+            "**B**", self, triggered=lambda: self._surround("**", "**")
+        )
+        self.act_italic = QAction(
+            "*i*", self, triggered=lambda: self._surround("*", "*")
+        )
+        self.act_code = QAction(
+            "`code`", self, triggered=lambda: self._surround("`", "`")
+        )
         self.act_h1 = QAction("# H1", self, triggered=lambda: self._prefix_line("# "))
         self.act_h2 = QAction("## H2", self, triggered=lambda: self._prefix_line("## "))
-        self.act_list = QAction("- list", self, triggered=lambda: self._prefix_line("- "))
+        self.act_list = QAction(
+            "- list", self, triggered=lambda: self._prefix_line("- ")
+        )
 
         # Recent files submenu (populated later)
         self.recent_menu = QMenu("Open Recent", self)
@@ -147,10 +195,23 @@ class MarkdownEditor(QMainWindow):
         tb = QToolBar("Main", self)
         tb.setMovable(False)
         for a in (
-        self.act_new, self.act_open, self.act_save, self.act_save_as, self.act_export_html, self.act_export_pdf):
+            self.act_new,
+            self.act_open,
+            self.act_save,
+            self.act_save_as,
+            self.act_export_html,
+            self.act_export_pdf,
+        ):
             tb.addAction(a)
         tb.addSeparator()
-        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list):
+        for a in (
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+        ):
             tb.addAction(a)
         tb.addSeparator()
         tb.addAction(self.act_wrap)
@@ -165,7 +226,12 @@ class MarkdownEditor(QMainWindow):
             filem.addAction(a)
         filem.addMenu(self.recent_menu)
         filem.addSeparator()
-        for a in (self.act_save, self.act_save_as, self.act_export_html, self.act_export_pdf):
+        for a in (
+            self.act_save,
+            self.act_save_as,
+            self.act_export_html,
+            self.act_export_pdf,
+        ):
             filem.addAction(a)
         filem.addSeparator()
         filem.addAction(self.act_quit)
@@ -203,7 +269,9 @@ class MarkdownEditor(QMainWindow):
             self.recent_menu.addAction(a)
             return
         for p in self.recent_files[:MAX_RECENTS]:
-            action = QAction(p, self, triggered=lambda chk=False, x=p: self._open_recent(x))
+            action = QAction(
+                p, self, triggered=lambda chk=False, x=p: self._open_recent(x)
+            )
             self.recent_menu.addAction(action)
 
     def _open_recent(self, path_str: str):
@@ -240,7 +308,10 @@ class MarkdownEditor(QMainWindow):
 
     def open_dialog(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Open Markdown", "", "Markdown (*.md *.markdown *.mdown);;Text (*.txt);;All files (*)"
+            self,
+            "Open Markdown",
+            "",
+            "Markdown (*.md *.markdown *.mdown);;Text (*.txt);;All files (*)",
         )
         if path:
             self.open_file(Path(path))
@@ -268,8 +339,10 @@ class MarkdownEditor(QMainWindow):
 
     def save_as(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save As", str(self.current_path or ""),
-            "Markdown (*.md);;All files (*)"
+            self,
+            "Save As",
+            str(self.current_path or ""),
+            "Markdown (*.md);;All files (*)",
         )
         if not path:
             return False
@@ -312,8 +385,11 @@ class MarkdownEditor(QMainWindow):
 
     def export_pdf(self):
         # Choose output path
-        default_name = (self.current_path.with_suffix(".pdf").name
-                        if self.current_path else "document.pdf")
+        default_name = (
+            self.current_path.with_suffix(".pdf").name
+            if self.current_path
+            else "document.pdf"
+        )
         path, _ = QFileDialog.getSaveFileName(
             self, "Export PDF", default_name, "PDF (*.pdf)"
         )
@@ -349,6 +425,7 @@ class MarkdownEditor(QMainWindow):
     # ---------- Markdown rendering ----------
     def _render_html(self, md_text: str) -> str:
         import markdown  # lazy import
+
         body = markdown.markdown(
             md_text,
             extensions=[
@@ -357,11 +434,9 @@ class MarkdownEditor(QMainWindow):
                 "codehilite",  # syntax highlighting (Pygments)
                 "toc",  # [TOC] anchors
                 "sane_lists",
-                "smarty"
+                "smarty",
             ],
-            extension_configs={
-                "codehilite": {"guess_lang": True, "noclasses": True}
-            },
+            extension_configs={"codehilite": {"guess_lang": True, "noclasses": True}},
             output_format="html5",
         )
         return HTML_TEMPLATE.format(css=PREVIEW_CSS, body=body)
@@ -379,7 +454,9 @@ class MarkdownEditor(QMainWindow):
 
     # ---------- Editor helpers ----------
     def toggle_wrap(self, on: bool):
-        mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
+        mode = (
+            QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
+        )
         self.editor.setLineWrapMode(mode)
 
     def toggle_preview(self, on: bool):
@@ -389,7 +466,9 @@ class MarkdownEditor(QMainWindow):
         cursor = self.editor.textCursor()
         if not cursor.hasSelection():
             cursor.insertText(left + right)
-            cursor.movePosition(cursor.MoveOperation.Left, cursor.MoveMode.MoveAnchor, len(right))
+            cursor.movePosition(
+                cursor.MoveOperation.Left, cursor.MoveMode.MoveAnchor, len(right)
+            )
             self.editor.setTextCursor(cursor)
             return
         text = cursor.selectedText()
@@ -417,9 +496,10 @@ class MarkdownEditor(QMainWindow):
         if not self.modified:
             return True
         resp = QMessageBox.question(
-            self, "Discard changes?",
+            self,
+            "Discard changes?",
             "You have unsaved changes. Discard them?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         return resp == QMessageBox.StandardButton.Yes
 
@@ -456,13 +536,14 @@ class MarkdownEditor(QMainWindow):
     # ---------- Help ----------
     def show_about(self):
         QMessageBox.information(
-            self, "About",
+            self,
+            "About",
             f"{APP_NAME}\n"
             "• Live preview (debounced)\n"
             "• Open/Save .md (atomic), Export HTML/PDF\n"
             "• Recent files, dark-mode aware preview\n"
             "• Simple formatting helpers\n\n"
-            "Built with PyQt6 + python-markdown."
+            "Built with PyQt6 + python-markdown.",
         )
 
 

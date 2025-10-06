@@ -1,5 +1,6 @@
 from pymd.services.markdown_renderer import MarkdownRenderer
 
+
 def test_renderer_basic_html(renderer: MarkdownRenderer):
     html = renderer.to_html("# Title\n\nSome **bold** text.")
     # <h1 id="title">Title</h1> (toc extension adds id)
@@ -8,6 +9,7 @@ def test_renderer_basic_html(renderer: MarkdownRenderer):
     # our template wraps body and includes CSS <style>
     assert html.lower().startswith("<!doctype html")
     assert "<style>" in html
+
 
 def test_renderer_code_block(renderer: MarkdownRenderer):
     md = "```python\nprint('x')\n```"

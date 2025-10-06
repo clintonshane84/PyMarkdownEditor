@@ -31,9 +31,11 @@ def qapp():
 
 # --- Other common fixtures ---
 
+
 @pytest.fixture()
 def tmp_settings_path(tmp_path: Path) -> Path:
     return tmp_path / "settings.ini"
+
 
 @pytest.fixture()
 def qsettings(tmp_settings_path: Path) -> QSettings:
@@ -42,13 +44,16 @@ def qsettings(tmp_settings_path: Path) -> QSettings:
     s.clear()
     return s
 
+
 @pytest.fixture()
 def settings_service(qsettings: QSettings) -> SettingsService:
     return SettingsService(qsettings)
 
+
 @pytest.fixture()
 def file_service() -> FileService:
     return FileService()
+
 
 @pytest.fixture()
 def renderer() -> MarkdownRenderer:

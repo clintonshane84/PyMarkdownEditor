@@ -5,6 +5,7 @@ from PyQt6.QtCore import QSettings, QByteArray
 from pymd.domain.interfaces import ISettingsService
 from pymd.utils.constants import SETTINGS_GEOMETRY, SETTINGS_SPLITTER, SETTINGS_RECENTS
 
+
 class SettingsService(ISettingsService):
     """Persist small UI bits like geometry, splitter position, and recent files."""
 

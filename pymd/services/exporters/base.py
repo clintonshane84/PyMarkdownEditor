@@ -2,11 +2,13 @@ from __future__ import annotations
 from typing import Dict, List
 from pymd.domain.interfaces import IExporter
 
+
 class ExporterRegistry:
     """
     Simple registry/factory for export strategies (OCP).
     UI can iterate over `all()` to build dynamic export menus.
     """
+
     _registry: Dict[str, IExporter] = {}
 
     @classmethod

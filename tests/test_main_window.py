@@ -1,5 +1,4 @@
 from __future__ import annotations
-from pathlib import Path
 import pytest
 
 from pymd.ui.main_window import MainWindow
@@ -51,7 +50,10 @@ def test_window_write_failure_shows_error(monkeypatch, tmp_path, window: MainWin
     # Simulate write failure in FileService
     def boom(path, text):
         raise IOError("disk full")
-    monkeypatch.setattr(type(window.file_service), "write_text_atomic", boom, raising=False)
+
+    monkeypatch.setattr(
+        type(window.file_service), "write_text_atomic", boom, raising=False
+    )
     assert window._write_to(tmp_path / "bad.md") is False
 
 
@@ -61,13 +63,17 @@ def test_window_export_html_pdf(tmp_path, window: MainWindow):
     pdf_out = tmp_path / "x.pdf"
 
     from pymd.services.exporters.base import ExporterRegistry
+
     exps = {e.name: e for e in ExporterRegistry.all()}
 
     html = window.renderer.to_html("# T")
     exps["html"].export(html, html_out)
-    assert html_out.exists() and html_out.read_text(encoding="utf-8").lower().startswith("<!doctype")
+    assert html_out.exists() and html_out.read_text(
+        encoding="utf-8"
+    ).lower().startswith("<!doctype")
 
     from PyQt6.QtWidgets import QApplication
+
     assert QApplication.instance() is not None
     exps["pdf"].export(html, pdf_out)
     assert pdf_out.exists() and pdf_out.stat().st_size > 0
@@ -81,13 +87,17 @@ def test_window_recents_persist(window: MainWindow, tmp_path):
 
 
 def test_window_confirm_discard_negative(window: MainWindow, monkeypatch):
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No
+    )
     window.doc.modified = True
     assert window._confirm_discard() is False
 
 
 def test_window_confirm_discard_positive(window: MainWindow, monkeypatch):
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
+    )
     window.doc.modified = True
     assert window._confirm_discard() is True
 

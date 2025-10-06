@@ -6,6 +6,7 @@ from PyQt6.QtCore import QMarginsF
 
 from pymd.domain.interfaces import IExporter
 
+
 class PdfExporter(IExporter):
     name = "pdf"
     label = "Export PDF…"

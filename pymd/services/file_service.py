@@ -4,6 +4,7 @@ from PyQt6.QtCore import QSaveFile, QIODevice
 
 from pymd.domain.interfaces import IFileService
 
+
 class FileService(IFileService):
     """Atomic reads/writes for text files."""
 

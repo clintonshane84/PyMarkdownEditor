@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from pymd.domain.interfaces import IExporter
 
+
 class HtmlExporter(IExporter):
     name = "html"
     label = "Export HTML…"

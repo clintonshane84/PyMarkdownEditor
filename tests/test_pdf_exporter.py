@@ -1,6 +1,7 @@
 import pytest
 from pymd.services.exporters.pdf_exporter import PdfExporter
 
+
 @pytest.mark.usefixtures("qapp")
 def test_pdf_exporter_success(tmp_path):
     exp = PdfExporter()
@@ -8,6 +9,7 @@ def test_pdf_exporter_success(tmp_path):
     exp.export("<html><body><h1>Test</h1></body></html>", out)
     # QPrinter writes a valid PDF; at least ensure non-empty file exists
     assert out.exists() and out.stat().st_size > 0
+
 
 @pytest.mark.usefixtures("qapp")
 def test_pdf_exporter_raises_on_print_error(monkeypatch, tmp_path):
