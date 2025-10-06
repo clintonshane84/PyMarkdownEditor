@@ -3,7 +3,7 @@
 ## Workflows
 
 - **CI** — `.github/workflows/ci.yml`
-  - Runs on push/PR to `main` and `develop`
+  - Runs on push/PR to `master` and `development`
   - Steps:
     - `ruff format --check .` (style)
     - `ruff check .` (lint)
