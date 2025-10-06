@@ -5,4 +5,4 @@ from .file_service import FileService
 from .markdown_renderer import MarkdownRenderer
 from .settings_service import SettingsService
 
-__all__ = ["MarkdownRenderer", "FileService", "SettingsService", "ExporterRegistry"]
+__all__ = ["ExporterRegistry", "FileService", "MarkdownRenderer", "SettingsService"]
