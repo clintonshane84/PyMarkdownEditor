@@ -211,8 +211,8 @@ pytest --cov=pymd --cov-report=term-missing
 If you suspect a security issue:
 
 * **Do not** open a public issue.
-* Email: **security@[your-domain]** (replace), or DM the current Code Owner.
-* We’ll acknowledge within 72 hours and work on a fix.
+* Send Github DM to the current Code Owner.
+* I’ll acknowledge within 72 hours and work on a fix, not guarenteed, but its best effort.
 
 ---
 
@@ -222,10 +222,10 @@ If you suspect a security issue:
 * Update `CHANGELOG.md`.
 * Create a tag `vX.Y.Z` and push:
 
-  ```bash
-  git tag v0.1.0
-  git push origin v0.1.0
-  ```
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 * The **Release binaries workflow** builds PyInstaller artifacts for Windows/macOS/Linux and attaches them to the GitHub Release. See `docs/RELEASING.md`.
 
 ---
@@ -241,5 +241,5 @@ If you suspect a security issue:
 ## Contact
 
 * General: open an issue
-* Security: Send a Github DM to username **@clintonshane84**
+* Security: Send a DM to the Current Code Owner
 * Current Code Owner: **Clinton Wright / @clintonshane84**
