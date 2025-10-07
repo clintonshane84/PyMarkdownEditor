@@ -1,45 +1,99 @@
 # pyinstaller.spec
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
-from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
-from pathlib import Path
-import sys
+# Clean, minimal spec for PyMarkdownEditor (onedir)
+# Generates dist/PyMarkdownEditor/ with PyQt6 runtime
 
-entry = "pymd/__main__.py"
-name = "PyMarkdownEditor"
+from PyInstaller.utils.hooks import collect_submodules
 
-# Hidden imports to ensure PyQt6 plugins and libs are included
+app_name = "PyMarkdownEditor"
+entrypoint = "pymd/__main__.py"
+
+# Keep markdown/pygments helpers
 hidden = []
-hidden += collect_submodules("PyQt6")
-hidden += ["PyQt6.QtPrintSupport", "markdown", "pygments"]
+hidden += collect_submodules("markdown")
+hidden += collect_submodules("pygments")
 
-datas = []
-# If you add non-code assets later (icons, CSS, etc), include them like:
-# datas += collect_data_files("pymd", includes=["utils/*.css"])
+# Only the PyQt6 components we actually use
+hidden += [
+    "PyQt6",
+    "PyQt6.QtCore",
+    "PyQt6.QtGui",
+    "PyQt6.QtWidgets",
+    "PyQt6.QtPrintSupport",
+]
+
+# Exclude heavy Qt modules that trigger missing libs on Linux runners
+excludes = [
+    "PyQt6.QtMultimedia",
+    "PyQt6.QtMultimediaWidgets",
+    "PyQt6.QtTextToSpeech",
+    "PyQt6.QtSpatialAudio",
+    "PyQt6.QtNfc",
+    "PyQt6.QtSerialPort",
+    "PyQt6.QtSensors",
+    "PyQt6.QtPdf",
+    "PyQt6.QtPdfWidgets",
+    "PyQt6.QtSvg",
+    "PyQt6.QtSvgWidgets",
+    "PyQt6.QtNetwork",
+    "PyQt6.QtQml",
+    "PyQt6.QtQuick",
+    "PyQt6.QtQuick3D",
+    "PyQt6.QtOpenGL",
+    "PyQt6.QtOpenGLWidgets",
+    # and the rest of Qt stuff we don't need...
+]
+
+blockcipher = None
 
 a = Analysis(
-    [entry],
-    pathex=[str(Path.cwd())],
+    [entrypoint],
+    pathex=["."],
     binaries=[],
-    datas=datas,
+    datas=[],
     hiddenimports=hidden,
     hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
+    hooksconfig={
+        # Ask PyInstaller's PyQt6 hook to include only the essentials
+        # See hook documentation for supported keys; platforms is enough for us.
+        "hook-PyQt6.py": {
+            "plugins": ["platforms", "printsupport"],  # keep platform plugin + print support
+            "excluded_qml_plugins": "all",
+        },
+    },
+    excludes=excludes,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure)
+pyz = PYZ(a.pure, a.zipped_data, cipher=blockcipher)
+
+# GUI app (console=False). If you want console on Linux, set console=True for debugging.
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.zipfiles,
     a.datas,
-    name=name,
-    console=False,   # windowed app (no console)
-    icon=None,       # drop an .ico/.icns later and set here if desired
+    [],
+    name=app_name,
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,
 )
 
-# On macOS this yields an .app bundle; on Win/Linux it's a single file in dist/
-coll = COLLECT(exe, strip=False, upx=False, name=name)
+coll = COLLECT(
+    exe,                # <-- pass the EXE object, not a path
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    name=app_name,      # dist/<name>/
+)
