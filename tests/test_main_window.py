@@ -66,6 +66,10 @@ def test_window_write_failure_shows_error(monkeypatch, tmp_path: Path, window: M
         raise OSError("disk full")
 
     monkeypatch.setattr(type(window.file_service), "write_text_atomic", boom, raising=False)
+
+    # Prevent modal dialog from blocking CI on Windows
+    monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: QMessageBox.StandardButton.Ok)
+
     assert window._write_to(tmp_path / "bad.md") is False
 
 
