@@ -17,12 +17,11 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONDONTWRITEBYTECODE: "1"
-      PYTEST_ADDOPTS: "--timeout=120 --maxfail=1"   # needs pytest-timeout in dev deps
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.12", "3.13"]
+        os: [ ubuntu-latest, windows-latest ]
+        python-version: [ "3.12", "3.13" ]
 
     steps:
       - name: Checkout
@@ -77,7 +76,7 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            xvfb-run -a python -m pytest --cov=pymd --cov-report=term-missing -q
+            xvfb-run -a python -m pytest --cov=pymd --cov-report=term-missing -q --timeout=120 --maxfail=1
           else
-            python -m pytest --cov=pymd --cov-report=term-missing -q
+            python -m pytest --cov=pymd --cov-report=term-missing -q --timeout=120 --maxfail=1
           fi
