@@ -1,18 +1,15 @@
 # pyinstaller.spec
-# Clean, minimal spec for PyMarkdownEditor (onedir)
-# Generates dist/PyMarkdownEditor/ with PyQt6 runtime
-
 from PyInstaller.utils.hooks import collect_submodules
 
 app_name = "PyMarkdownEditor"
 entrypoint = "pymd/__main__.py"
 
-# Keep markdown/pygments helpers
+# Hidden imports used by markdown/pygments
 hidden = []
 hidden += collect_submodules("markdown")
 hidden += collect_submodules("pygments")
 
-# Only the PyQt6 components we actually use
+# Keep only Qt modules we actually use
 hidden += [
     "PyQt6",
     "PyQt6.QtCore",
@@ -21,8 +18,8 @@ hidden += [
     "PyQt6.QtPrintSupport",
 ]
 
-# Exclude heavy Qt modules that trigger missing libs on Linux runners
 excludes = [
+    # Exclude heavy/unused Qt modules that drag plugins with external deps
     "PyQt6.QtMultimedia",
     "PyQt6.QtMultimediaWidgets",
     "PyQt6.QtTextToSpeech",
@@ -40,7 +37,6 @@ excludes = [
     "PyQt6.QtQuick3D",
     "PyQt6.QtOpenGL",
     "PyQt6.QtOpenGLWidgets",
-    # and the rest of Qt stuff we don't need...
 ]
 
 blockcipher = None
@@ -53,12 +49,8 @@ a = Analysis(
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={
-        # Ask PyInstaller's PyQt6 hook to include only the essentials
-        # See hook documentation for supported keys; platforms is enough for us.
-        "hook-PyQt6.py": {
-            "plugins": ["platforms", "printsupport"],  # keep platform plugin + print support
-            "excluded_qml_plugins": "all",
-        },
+        # Keep only platform + printsupport plugins
+        "hook-PyQt6.py": {"plugins": ["platforms", "printsupport"], "excluded_qml_plugins": "all"},
     },
     excludes=excludes,
     noarchive=False,
@@ -66,7 +58,6 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=blockcipher)
 
-# GUI app (console=False). If you want console on Linux, set console=True for debugging.
 exe = EXE(
     pyz,
     a.scripts,
@@ -79,21 +70,16 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=None,
+    console=False,  # GUI app
 )
 
+# IMPORTANT: Only pass TOC objects to COLLECT; NO STRINGS/PATHS
 coll = COLLECT(
-    exe,                # <-- pass the EXE object, not a path
+    exe,
     a.binaries,
     a.zipfiles,
     a.datas,
     strip=False,
     upx=False,
-    name=app_name,      # dist/<name>/
+    name=app_name,  # keyword only, this sets dist/<name>/
 )
