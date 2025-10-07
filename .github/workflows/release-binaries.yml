@@ -82,7 +82,7 @@ jobs:
             echo "asset=$OUT" >> $GITHUB_OUTPUT
           else
             OUT="PyMarkdownEditor-linux-x86_64"
-            cp "dist/PyMarkdownEditor/PyMarkdownEditor" "$OUT"
+            cp "dist/PyMarkdownEditor" "$OUT"
             chmod +x "$OUT"
             echo "asset=$OUT" >> $GITHUB_OUTPUT
           fi
