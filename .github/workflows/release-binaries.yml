@@ -37,6 +37,7 @@ jobs:
           python -m pip install -U pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f build-requirements.txt ]; then pip install -r build-requirements.txt; fi
+          pip install pyinstaller
         shell: bash
 
       - name: Clean previous builds
@@ -44,14 +45,17 @@ jobs:
         run: |
           rm -rf build dist
 
-      - name: Build (Windows via spec, *nix via CLI)
+      - name: Build (Windows via spec, Linux/macOS via CLI)
         shell: bash
         run: |
+          set -euxo pipefail
           case "${{ runner.os }}" in
             Windows)
+              # Use your spec on Windows so you get the expected layout
               pyinstaller pyinstaller.spec
               ;;
-            Linux|macOS)
+            Linux)
+              # Onefile CLI/GUI binary (no .app on Linux)
               pyinstaller -F -n PyMarkdownEditor \
                 --hidden-import markdown \
                 --collect-submodules markdown \
@@ -63,29 +67,84 @@ jobs:
                 --hidden-import PyQt6.QtPrintSupport \
                 pymd/__main__.py
               ;;
+            macOS)
+              # Produce a .app bundle on macOS (no -F)
+              pyinstaller -n PyMarkdownEditor --windowed \
+                --hidden-import markdown \
+                --collect-submodules markdown \
+                --collect-submodules pygments \
+                --hidden-import PyQt6 \
+                --hidden-import PyQt6.QtCore \
+                --hidden-import PyQt6.QtGui \
+                --hidden-import PyQt6.QtWidgets \
+                --hidden-import PyQt6.QtPrintSupport \
+                pymd/__main__.py
+              ;;
           esac
+          echo "Built contents of dist/:"
+          ls -la dist
 
-      # Normalize & package outputs per platform
+      # Normalize & package outputs per platform (handles .app, onefile, onedir)
       - name: Package artifacts
         id: pack
         shell: bash
         run: |
-          set -e
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            OUT="PyMarkdownEditor-windows-x86_64.exe"
-            cp "dist/PyMarkdownEditor/PyMarkdownEditor.exe" "$OUT"
-            echo "asset=$OUT" >> $GITHUB_OUTPUT
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            APP="dist/PyMarkdownEditor.app"
-            OUT="PyMarkdownEditor-macos-universal.zip"
-            /usr/bin/zip -r "$OUT" "$APP"
-            echo "asset=$OUT" >> $GITHUB_OUTPUT
+          set -euxo pipefail
+          OS="${RUNNER_OS}"   # Windows | Linux | macOS
+
+          if [[ "$OS" == "Windows" ]]; then
+            # Try onefile first
+            if [[ -f "dist/PyMarkdownEditor.exe" ]]; then
+              OUT="PyMarkdownEditor-windows-x86_64.exe"
+              cp "dist/PyMarkdownEditor.exe" "$OUT"
+            # Then onedir (dist/PyMarkdownEditor/PyMarkdownEditor.exe)
+            elif [[ -f "dist/PyMarkdownEditor/PyMarkdownEditor.exe" ]]; then
+              OUT="PyMarkdownEditor-windows-x86_64.zip"
+              (cd dist && zip -r "../$OUT" "PyMarkdownEditor")
+            else
+              echo "No expected Windows outputs found in dist/"
+              ls -la dist || true
+              exit 1
+            fi
+
+          elif [[ "$OS" == "macOS" ]]; then
+            # Prefer .app if available
+            if [[ -d "dist/PyMarkdownEditor.app" ]]; then
+              OUT="PyMarkdownEditor-macos-universal.zip"
+              (cd dist && /usr/bin/zip -ry "../$OUT" "PyMarkdownEditor.app")
+            # Otherwise handle onefile binary
+            elif [[ -f "dist/PyMarkdownEditor" ]]; then
+              OUT="PyMarkdownEditor-macos-universal"
+              cp "dist/PyMarkdownEditor" "$OUT"
+              chmod +x "$OUT"
+            # Or onedir fallback
+            elif [[ -d "dist/PyMarkdownEditor" ]]; then
+              OUT="PyMarkdownEditor-macos-universal.zip"
+              (cd dist && /usr/bin/zip -ry "../$OUT" "PyMarkdownEditor")
+            else
+              echo "No expected macOS outputs found in dist/"
+              ls -la dist || true
+              exit 1
+            fi
+
           else
-            OUT="PyMarkdownEditor-linux-x86_64"
-            cp "dist/PyMarkdownEditor" "$OUT"
-            chmod +x "$OUT"
-            echo "asset=$OUT" >> $GITHUB_OUTPUT
+            # Linux: onefile preferred; fall back to onedir
+            if [[ -f "dist/PyMarkdownEditor" ]]; then
+              OUT="PyMarkdownEditor-linux-x86_64"
+              cp "dist/PyMarkdownEditor" "$OUT"
+              chmod +x "$OUT"
+            elif [[ -d "dist/PyMarkdownEditor" ]]; then
+              OUT="PyMarkdownEditor-linux-x86_64.tar.gz"
+              tar -czf "$OUT" -C dist PyMarkdownEditor
+            else
+              echo "No expected Linux outputs found in dist/"
+              ls -la dist || true
+              exit 1
+            fi
           fi
+
+          echo "asset=$OUT" >> $GITHUB_OUTPUT
+          echo "Packaged asset: $OUT"
 
       - name: Upload artifact (for inspection)
         uses: actions/upload-artifact@v4
@@ -100,16 +159,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist-artifacts
 
+      - name: List artifacts
+        run: ls -R dist-artifacts || true
+
       - name: Create or Update GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
