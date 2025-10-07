@@ -1,16 +1,25 @@
-name: Build & Release Binaries
+name: Release Binaries
 
 on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      pyinstaller_spec:
+        description: "Path to .spec file (leave empty to auto-generate)"
+        required: false
+        default: "pyinstaller.spec"
+
+  # Build + publish when pushing a version tag like v0.1.0
   push:
     tags:
-      - "v*.*.*"   # e.g., v0.2.0
+      - "v*.*.*"
 
 permissions:
-  contents: write  # required to create/update releases and upload assets
+  contents: write  # needed to create/upload Release assets on tag pushes
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     env:
       QT_QPA_PLATFORM: offscreen
@@ -20,104 +29,186 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Use a single, stable Python for packaging; stick with the same across OSes.
+        python-version: ["3.11"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Derive version from ref
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Building version: ${{ steps.version.outputs.version }}"
+
+      - name: Install Qt runtime libs (Ubuntu only)
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 \
+            libgl1 \
+            libgl1-mesa-dri \
+            libopengl0 \
+            libxkbcommon0 \
+            libxcb1 \
+            libx11-xcb1 \
+            libxrandr2 \
+            libxext6 \
+            libxi6 \
+            libcups2 \
+            libdbus-1-3 \
+            libnss3 \
+            libxshmfence1 \
+            libdrm2 \
+            libgbm1 \
+            libfreetype6 \
+            fonts-dejavu-core
+          # sanity check
+          ldconfig -p | grep -E 'libEGL\.so\.1|libGL\.so\.1' || true
+
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install runtime + build deps
+      - name: Install build dependencies
+        shell: bash
         run: |
-          python -m pip install -U pip
+          python -m pip install -U pip wheel
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f build-requirements.txt ]; then pip install -r build-requirements.txt; fi
-        shell: bash
+          # dev-requirements may not be needed but won't hurt if present
+          if [ -f dev-requirements.txt ]; then pip install -r dev-requirements.txt; fi
+          pip install pyinstaller
 
-      - name: Clean previous builds
+      # -------- Build (Linux/macOS) --------
+      - name: Build with PyInstaller (*nix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          rm -rf build dist
-
-      - name: Build (Windows via spec, *nix via CLI)
-        shell: bash
-        run: |
-          case "${{ runner.os }}" in
-            Windows)
-              pyinstaller pyinstaller.spec
-              ;;
-            Linux|macOS)
-              pyinstaller -F -n PyMarkdownEditor \
-                --hidden-import markdown \
-                --collect-submodules markdown \
-                --collect-submodules pygments \
-                --hidden-import PyQt6 \
-                --hidden-import PyQt6.QtCore \
-                --hidden-import PyQt6.QtGui \
-                --hidden-import PyQt6.QtWidgets \
-                --hidden-import PyQt6.QtPrintSupport \
-                pymd/__main__.py
-              ;;
-          esac
-
-      # Normalize & package outputs per platform
-      - name: Package artifacts
-        id: pack
-        shell: bash
-        run: |
-          set -e
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            OUT="PyMarkdownEditor-windows-x86_64.exe"
-            cp "dist/PyMarkdownEditor/PyMarkdownEditor.exe" "$OUT"
-            echo "asset=$OUT" >> $GITHUB_OUTPUT
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            APP="dist/PyMarkdownEditor.app"
-            OUT="PyMarkdownEditor-macos-universal.zip"
-            /usr/bin/zip -r "$OUT" "$APP"
-            echo "asset=$OUT" >> $GITHUB_OUTPUT
+          set -euxo pipefail
+          SPEC_INPUT="${{ github.event.inputs.pyinstaller_spec }}"
+          if [[ -n "${SPEC_INPUT}" && -f "${SPEC_INPUT}" ]]; then
+            pyinstaller "${SPEC_INPUT}"
+          elif [[ -f "pyinstaller.spec" ]]; then
+            pyinstaller pyinstaller.spec
           else
-            OUT="PyMarkdownEditor-linux-x86_64"
-            cp "dist/PyMarkdownEditor/PyMarkdownEditor" "$OUT"
-            chmod +x "$OUT"
-            echo "asset=$OUT" >> $GITHUB_OUTPUT
+            # Fallback: onefile GUI app from pymd/__main__.py
+            pyinstaller -n PyMarkdownEditor --onefile -w pymd/__main__.py
           fi
 
-      - name: Upload artifact (for inspection)
+      # -------- Build (Windows) --------
+      - name: Build with PyInstaller (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $specInput = "${{ github.event.inputs.pyinstaller_spec }}"
+          if ($specInput -and (Test-Path $specInput)) {
+            pyinstaller $specInput
+          } elseif (Test-Path "pyinstaller.spec") {
+            pyinstaller pyinstaller.spec
+          } else {
+            pyinstaller -n PyMarkdownEditor --onefile -w pymd/__main__.py
+          }
+
+      # -------- Package (*nix) --------
+      - name: Package artifacts (*nix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p package
+          echo "Dist contents:"
+          ls -la dist || true
+
+          OS_TAG=$([ "${{ runner.os }}" = "Linux" ] && echo "linux" || echo "macos")
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [[ -d "dist/PyMarkdownEditor.app" ]]; then
+            # macOS app bundle -> tar.gz
+            tar -czf "package/PyMarkdownEditor-${VERSION}-${OS_TAG}.tar.gz" -C dist PyMarkdownEditor.app
+          elif [[ -d "dist/PyMarkdownEditor" ]]; then
+            # onedir -> tar.gz
+            tar -czf "package/PyMarkdownEditor-${VERSION}-${OS_TAG}.tar.gz" -C dist PyMarkdownEditor
+          elif [[ -f "dist/PyMarkdownEditor" ]]; then
+            # onefile -> binary
+            cp "dist/PyMarkdownEditor" "package/PyMarkdownEditor-${VERSION}-${OS_TAG}"
+            chmod +x "package/PyMarkdownEditor-${VERSION}-${OS_TAG}"
+          else
+            echo "No expected outputs in dist/"
+            exit 1
+          fi
+
+      - name: Upload artifacts (*nix)
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.pack.outputs.asset }}
-          path: ${{ steps.pack.outputs.asset }}
+          name: PyMarkdownEditor-${{ runner.os }}-${{ steps.version.outputs.version }}
+          path: package/**
+          if-no-files-found: error
+          compression-level: 9
+          overwrite: true
 
-  release:
-    name: Create/Update Release
-    needs: build
+      # -------- Package (Windows) --------
+      - name: Package artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          $version = "${{ steps.version.outputs.version }}"
+          if (Test-Path "dist/PyMarkdownEditor.exe") {
+            Copy-Item "dist/PyMarkdownEditor.exe" "package/PyMarkdownEditor-$version-windows.exe"
+          } elseif (Test-Path "dist/PyMarkdownEditor") {
+            Compress-Archive -Path "dist/PyMarkdownEditor/*" -DestinationPath "package/PyMarkdownEditor-$version-windows.zip" -Force
+          } else {
+            Write-Error "No expected outputs found in dist/"
+            exit 1
+          }
+
+      - name: Upload artifacts (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PyMarkdownEditor-${{ runner.os }}-${{ steps.version.outputs.version }}
+          path: package/**
+          if-no-files-found: error
+          overwrite: true
+
+  publish:
+    name: Publish GitHub Release assets
+    # Only run when the ref is a tag (i.e., a versioned release)
+    if: github.ref_type == 'tag'
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
+    steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist-artifacts
+          path: release_artifacts
 
-      - name: Create or Update GitHub Release
-        id: create_release
+      - name: List artifacts
+        run: |
+          ls -R release_artifacts || true
+
+      - name: Create/Update GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: false
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body: |
-            Automated build for ${{ github.ref_name }}.
-            See CHANGELOG.md for details.
           files: |
-            dist-artifacts/**/*
+            release_artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
