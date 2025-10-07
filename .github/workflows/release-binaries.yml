@@ -13,7 +13,7 @@ jobs:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
-      QT_QPA_PLATFORM: offscreen  # headless Qt (for any render/tests you may add)
+      QT_QPA_PLATFORM: offscreen
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONDONTWRITEBYTECODE: "1"
 
@@ -38,6 +38,11 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f build-requirements.txt ]; then pip install -r build-requirements.txt; fi
         shell: bash
+
+      - name: Clean previous builds
+        shell: bash
+        run: |
+          rm -rf build dist
 
       - name: Build with PyInstaller (spec)
         run: |
