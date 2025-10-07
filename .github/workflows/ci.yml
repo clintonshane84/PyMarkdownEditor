@@ -31,9 +31,8 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libegl1 \
-            libegl1-mesa \
             libgl1 \
             libgl1-mesa-dri \
             libopengl0 \
@@ -51,7 +50,7 @@ jobs:
             libgbm1 \
             libfreetype6 \
             fonts-dejavu-core
-          # sanity check: should print a path like /usr/lib/.../libEGL.so.1
+          # sanity check: should list providers for libEGL.so.1 / libGL.so.1
           ldconfig -p | grep -E 'libEGL\.so\.1|libGL\.so\.1' || true
 
       - name: Setup Python ${{ matrix.python-version }}
