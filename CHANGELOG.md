@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
+## [0.3.4]
+### Maintenance
+- updated CHANGELOG.md with latest
+
+---
+
 ## [0.3.3]
 ### Fixed
 - Follow-up fix to `__main__.py`: ensure absolute import `from pymd.main import main`, exiting via `raise SystemExit(main())` for consistency across frozen builds.
