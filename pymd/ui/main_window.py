@@ -70,10 +70,10 @@ class MainWindow(QMainWindow):
 
         # Restore UI state
         geo = self.settings.get_geometry()
-        if isinstance(geo, bytes | bytearray):
+        if isinstance(geo, (bytes, bytearray)):
             self.restoreGeometry(QByteArray(geo))
         split = self.settings.get_splitter()
-        if isinstance(split, bytes | bytearray):
+        if isinstance(split, (bytes, bytearray)):
             self.splitter.restoreState(QByteArray(split))
 
         # Load starting content
@@ -105,6 +105,9 @@ class MainWindow(QMainWindow):
             shortcut=QKeySequence.StandardKey.SaveAs,
             triggered=self._save_as,
         )
+        self.act_quit = QAction(
+            "Quit", self, shortcut=QKeySequence.StandardKey.Quit, triggered=self.close
+        )
         self.act_toggle_wrap = QAction(
             "Toggle Wrap",
             self,
@@ -119,6 +122,14 @@ class MainWindow(QMainWindow):
             checked=True,
             triggered=self._toggle_preview,
         )
+
+        # === Reintroduced basic formatting inserts ===
+        self.act_bold = QAction("**B**", self, triggered=lambda: self._surround("**", "**"))
+        self.act_italic = QAction("*i*", self, triggered=lambda: self._surround("*", "*"))
+        self.act_code = QAction("`code`", self, triggered=lambda: self._surround("`", "`"))
+        self.act_h1 = QAction("# H1", self, triggered=lambda: self._prefix_line("# "))
+        self.act_h2 = QAction("## H2", self, triggered=lambda: self._prefix_line("## "))
+        self.act_list = QAction("- list", self, triggered=lambda: self._prefix_line("- "))
 
         # Export actions from registry
         self.export_actions: list[QAction] = []
@@ -142,6 +153,12 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self.act_toggle_wrap)
         tb.addAction(self.act_toggle_preview)
+
+        # Formatting actions on toolbar
+        tb.addSeparator()
+        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list):
+            tb.addAction(a)
+
         self.addToolBar(tb)
 
     def _build_menu(self):
@@ -153,16 +170,24 @@ class MainWindow(QMainWindow):
         filem.addSeparator()
         filem.addAction(self.act_save)
         filem.addAction(self.act_save_as)
+
         for a in self.export_actions:
             filem.addAction(a)
         self._refresh_recent_menu()
+        filem.addSeparator()
+        filem.addAction(self.act_quit)
 
         viewm = m.addMenu("&View")
         viewm.addAction(self.act_toggle_wrap)
         viewm.addAction(self.act_toggle_preview)
 
+        # New "Format" menu for quick inserts
+        fmtm = m.addMenu("&Format")
+        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list):
+            fmtm.addAction(a)
+
     def _refresh_recent_menu(self):
-        self.recent_menu.clear()
+        self.recent_menu.clear
         if not self.recents:
             na = QAction("(empty)", self)
             na.setEnabled(False)
@@ -262,6 +287,56 @@ class MainWindow(QMainWindow):
 
     def _toggle_preview(self, on: bool):
         self.preview.setVisible(on)
+
+    # ---------- Formatting helpers ----------
+    def _surround(self, prefix: str, suffix: str) -> None:
+        """Surround selection with prefix/suffix; if no selection, insert pair and place cursor between."""
+        c = self.editor.textCursor()
+        if c.hasSelection():
+            # Replace selection with wrapped text
+            selected = c.selectedText()
+            # Qt uses U+2029 for line breaks in selectedText(); normalize back to '\n'
+            selected = selected.replace("\u2029", "\n")
+            c.insertText(f"{prefix}{selected}{suffix}")
+        else:
+            # Insert and move cursor between the pair
+            c.insertText(f"{prefix}{suffix}")
+            # Move left by len(suffix) to end up between
+            for _ in range(len(suffix)):
+                c.movePosition(c.MoveOperation.Left)
+            self.editor.setTextCursor(c)
+
+    def _prefix_line(self, text: str) -> None:
+        """Prefix each selected line (or current line) with given text."""
+        doc = self.editor.document()
+        c = self.editor.textCursor()
+        start = c.selectionStart()
+        end = c.selectionEnd()
+        if start == end:
+            # No selection -> just prefix current block
+            block = doc.findBlock(c.position())
+            tc = self.editor.textCursor()
+            tc.beginEditBlock()
+            tc.setPosition(block.position())
+            tc.insertText(text)
+            tc.endEditBlock()
+            return
+
+        # Multi-line selection: prefix every block touched by the selection
+        tc = self.editor.textCursor()
+        tc.beginEditBlock()
+        blk = doc.findBlock(start)
+        # Ensure we cover the last block that contains 'end-1'
+        last_pos = max(end - 1, start)
+        last_block = doc.findBlock(last_pos)
+        while blk.isValid():
+            ins = self.editor.textCursor()
+            ins.setPosition(blk.position())
+            ins.insertText(text)
+            if blk == last_block:
+                break
+            blk = blk.next()
+        tc.endEditBlock()
 
     # ---------- Helpers ----------
     def _render_preview(self):

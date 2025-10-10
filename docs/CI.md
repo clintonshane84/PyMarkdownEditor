@@ -16,6 +16,8 @@
 - **Build & Release Binaries** — `.github/workflows/release-binaries.yml`
   - Runs on tag push `v*.*.*`
   - Builds PyInstaller binaries and attaches them to the GitHub Release
+  - Generates a fresh copy of CHANGELOG.md file using python app `git-changelog`
+  - Commits and pushes up the updated CHANGELOG.md file
 
 ## Local equivalents
 
