@@ -70,10 +70,10 @@ class MainWindow(QMainWindow):
 
         # Restore UI state
         geo = self.settings.get_geometry()
-        if isinstance(geo, (bytes, bytearray)):
+        if isinstance(geo, bytes | bytearray):
             self.restoreGeometry(QByteArray(geo))
         split = self.settings.get_splitter()
-        if isinstance(split, (bytes, bytearray)):
+        if isinstance(split, bytes | bytearray):
             self.splitter.restoreState(QByteArray(split))
 
         # Load starting content
@@ -156,7 +156,14 @@ class MainWindow(QMainWindow):
 
         # Formatting actions on toolbar
         tb.addSeparator()
-        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list):
+        for a in (
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+        ):
             tb.addAction(a)
 
         self.addToolBar(tb)
@@ -183,11 +190,18 @@ class MainWindow(QMainWindow):
 
         # New "Format" menu for quick inserts
         fmtm = m.addMenu("&Format")
-        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list):
+        for a in (
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+        ):
             fmtm.addAction(a)
 
     def _refresh_recent_menu(self):
-        self.recent_menu.clear
+        self.recent_menu.clear()
         if not self.recents:
             na = QAction("(empty)", self)
             na.setEnabled(False)
@@ -290,7 +304,10 @@ class MainWindow(QMainWindow):
 
     # ---------- Formatting helpers ----------
     def _surround(self, prefix: str, suffix: str) -> None:
-        """Surround selection with prefix/suffix; if no selection, insert pair and place cursor between."""
+        """
+        Surround selection with prefix/suffix;
+        If no selection, insert pair & place cursor between.
+        """
         c = self.editor.textCursor()
         if c.hasSelection():
             # Replace selection with wrapped text
