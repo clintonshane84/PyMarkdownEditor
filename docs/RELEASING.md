@@ -8,10 +8,10 @@ This project ships **binary releases** for Windows, macOS, and Linux via GitHub 
 
 ## Steps
 1. Tag and push:
-   ```bash
+```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
-````
+```
 
 2. The workflow `.github/workflows/release-binaries.yml` will:
 
@@ -22,8 +22,8 @@ This project ships **binary releases** for Windows, macOS, and Linux via GitHub 
      * `PyMarkdownEditor-macos-universal.zip` (contains `.app`)
      * `PyMarkdownEditor-linux-x86_64`
    * Create/update a GitHub Release for the tag and upload the artifacts
-
-> If you need code signing, add platform-specific signing steps before packaging.
+   * Generate a new CHANGELOG.md file based off git history
+   * Commit and push the updated CHANGELOG.md file
 
 ## Local Build (optional)
 
