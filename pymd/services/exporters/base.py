@@ -1,24 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from pymd.domain.interfaces import IExporter, IExporterRegistry
 
 
-@dataclass
 class ExporterRegistryInst(IExporterRegistry):
     """
-    Instance-based exporter registry (no globals, no side-effects).
-    Keeps registry local to the DI container for testability and clarity.
+    Per-instance exporter registry for tests and DI.
+    Tests expect to call `ExporterRegistryInst()` to get a fresh, empty registry.
     """
 
-    _reg: dict[str, IExporter] = field(default_factory=dict)
+    def __init__(self) -> None:
+        self._registry: dict[str, IExporter] = {}
 
     def register(self, e: IExporter) -> None:
-        self._reg[e.name] = e
+        self._registry[e.name] = e
 
     def get(self, name: str) -> IExporter:
-        return self._reg[name]
+        return self._registry[name]
 
     def all(self) -> list[IExporter]:
-        return list(self._reg.values())
+        return list(self._registry.values())
