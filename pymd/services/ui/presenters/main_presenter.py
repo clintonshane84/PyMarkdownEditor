@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
-from pymd.services.exporters.base import ExporterRegistry
+from pymd.services.exporters import ExporterRegistryInst
 from pymd.services.ui.ports.dialogs import IFileDialogService
 from pymd.services.ui.ports.messages import IMessageService
 
@@ -59,7 +59,7 @@ class MainPresenter:
 
     def export_via_dialog(self) -> None:
         # example: pick first exporter for brevity; wire proper menu later
-        exporters = list(ExporterRegistry.all())
+        exporters = list(ExporterRegistryInst.all())
         if not exporters:
             self.messages.error(None, "Export", "No exporters registered.")
             return
