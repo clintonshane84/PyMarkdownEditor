@@ -170,7 +170,7 @@ pytest -q
 
 ## License
 
-Apache-2.0 © 2025 **[Your Name or Org]**
+Apache-2.0 © 2025 **clintonshane84**
 See [LICENSE](LICENSE).
 
 ---

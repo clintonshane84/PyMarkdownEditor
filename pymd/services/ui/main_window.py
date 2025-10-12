@@ -16,9 +16,13 @@ from PyQt6.QtWidgets import (
     QToolBar,
 )
 
-from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
+from pymd.domain.interfaces import (
+    IExporterRegistry,
+    IFileService,
+    IMarkdownRenderer,
+    ISettingsService,
+)
 from pymd.domain.models import Document
-from pymd.services.exporters.base import ExporterRegistry
 from pymd.utils.constants import MAX_RECENTS
 
 
@@ -27,9 +31,11 @@ class MainWindow(QMainWindow):
 
     def __init__(
         self,
+        *,
         renderer: IMarkdownRenderer,
         file_service: IFileService,
         settings: ISettingsService,
+        exporter_registry: IExporterRegistry,
         start_path: Path | None = None,
         app_title: str = "PyMarkdownEditor",
     ) -> None:
@@ -40,6 +46,7 @@ class MainWindow(QMainWindow):
         self.renderer = renderer
         self.file_service = file_service
         self.settings = settings
+        self.exporter_registry = exporter_registry
 
         self.doc = Document(path=None, text="", modified=False)
         self.recents: list[str] = self.settings.get_recent()
@@ -85,6 +92,15 @@ class MainWindow(QMainWindow):
         # DnD
         self.setAcceptDrops(True)
 
+        # (optional) presenter: attached later by DI via attach_presenter()
+        self.presenter = None
+
+    # ---- presenter wiring -------------------------------------------------
+
+    def attach_presenter(self, presenter) -> None:
+        """Explicit hook to attach a presenter (no dynamic setattr)."""
+        self.presenter = presenter
+
     # ---------- UI creation ----------
     def _build_actions(self):
         self.act_new = QAction(
@@ -123,7 +139,7 @@ class MainWindow(QMainWindow):
             triggered=self._toggle_preview,
         )
 
-        # === Reintroduced basic formatting inserts ===
+        # Formatting inserts
         self.act_bold = QAction("**B**", self, triggered=lambda: self._surround("**", "**"))
         self.act_italic = QAction("*i*", self, triggered=lambda: self._surround("*", "*"))
         self.act_code = QAction("`code`", self, triggered=lambda: self._surround("`", "`"))
@@ -131,9 +147,9 @@ class MainWindow(QMainWindow):
         self.act_h2 = QAction("## H2", self, triggered=lambda: self._prefix_line("## "))
         self.act_list = QAction("- list", self, triggered=lambda: self._prefix_line("- "))
 
-        # Export actions from registry
+        # Export actions from injected registry (no globals)
         self.export_actions: list[QAction] = []
-        for exporter in ExporterRegistry.all():
+        for exporter in self.exporter_registry.all():
             act = QAction(
                 exporter.label,
                 self,
@@ -177,7 +193,6 @@ class MainWindow(QMainWindow):
         filem.addSeparator()
         filem.addAction(self.act_save)
         filem.addAction(self.act_save_as)
-
         for a in self.export_actions:
             filem.addAction(a)
         self._refresh_recent_menu()
@@ -188,7 +203,6 @@ class MainWindow(QMainWindow):
         viewm.addAction(self.act_toggle_wrap)
         viewm.addAction(self.act_toggle_preview)
 
-        # New "Format" menu for quick inserts
         fmtm = m.addMenu("&Format")
         for a in (
             self.act_bold,
@@ -304,33 +318,22 @@ class MainWindow(QMainWindow):
 
     # ---------- Formatting helpers ----------
     def _surround(self, prefix: str, suffix: str) -> None:
-        """
-        Surround selection with prefix/suffix;
-        If no selection, insert pair & place cursor between.
-        """
         c = self.editor.textCursor()
         if c.hasSelection():
-            # Replace selection with wrapped text
-            selected = c.selectedText()
-            # Qt uses U+2029 for line breaks in selectedText(); normalize back to '\n'
-            selected = selected.replace("\u2029", "\n")
+            selected = c.selectedText().replace("\u2029", "\n")
             c.insertText(f"{prefix}{selected}{suffix}")
         else:
-            # Insert and move cursor between the pair
             c.insertText(f"{prefix}{suffix}")
-            # Move left by len(suffix) to end up between
             for _ in range(len(suffix)):
                 c.movePosition(c.MoveOperation.Left)
             self.editor.setTextCursor(c)
 
     def _prefix_line(self, text: str) -> None:
-        """Prefix each selected line (or current line) with given text."""
         doc = self.editor.document()
         c = self.editor.textCursor()
         start = c.selectionStart()
         end = c.selectionEnd()
         if start == end:
-            # No selection -> just prefix current block
             block = doc.findBlock(c.position())
             tc = self.editor.textCursor()
             tc.beginEditBlock()
@@ -339,11 +342,9 @@ class MainWindow(QMainWindow):
             tc.endEditBlock()
             return
 
-        # Multi-line selection: prefix every block touched by the selection
         tc = self.editor.textCursor()
         tc.beginEditBlock()
         blk = doc.findBlock(start)
-        # Ensure we cover the last block that contains 'end-1'
         last_pos = max(end - 1, start)
         last_block = doc.findBlock(last_pos)
         while blk.isValid():
