@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSettings
 
-from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
+from pymd.domain.interfaces import (
+    IExporterRegistry,
+    IFileService,
+    IMarkdownRenderer,
+    ISettingsService,
+)
 
 # Exporter registry: singleton-style instance that tests import as ExporterRegistryInst
 from pymd.services.exporters.base import ExporterRegistryInst
@@ -62,8 +67,10 @@ class Container:
         if self.messages is None and QtMessageService is not None:
             self.messages = QtMessageService()  # type: ignore[call-arg]
 
+        self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
+
         # Register built-in exporters if missing
-        self._ensure_builtin_exporters()
+        self._ensure_builtin_exporters(self.exporter_registry)
 
     # ---------- Class helpers (parity with previous API) ----------
 
@@ -84,18 +91,20 @@ class Container:
 
     # ---------- Internals ----------
 
-    def _ensure_builtin_exporters(self) -> None:
+    def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry = None) -> None:
+        if exporter_registry is None:
+            exporter_registry = ExporterRegistryInst()
         # html
         try:
-            ExporterRegistryInst.get("html")
+            exporter_registry.get("html")
         except KeyError:
-            ExporterRegistryInst.register(HtmlExporter())
+            exporter_registry.register(HtmlExporter())
 
         # pdf
         try:
-            ExporterRegistryInst.get("pdf")
+            exporter_registry.get("pdf")
         except KeyError:
-            ExporterRegistryInst.register(PdfExporter())
+            exporter_registry.register(PdfExporter())
 
     # ---------- UI factories ----------
 
@@ -118,6 +127,7 @@ class Container:
             settings=self.settings_service,
             messages=self.messages,
             dialogs=self.dialogs,
+            exporter_registry=ExporterRegistryInst(),
         )
 
     def build_main_window(
@@ -136,6 +146,7 @@ class Container:
             settings=self.settings_service,
             start_path=start_path,
             app_title=app_title,
+            exporter_registry=ExporterRegistryInst(),
         )
 
         # Attach presenter if both the presenter and adapters exist and the view supports it
