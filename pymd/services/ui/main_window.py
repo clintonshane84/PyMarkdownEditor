@@ -346,9 +346,7 @@ class MainWindow(QMainWindow):
         text = c.selectedText()
         # In Qt, selectedText() joins lines with U+2029; normalize to '\n'
         lines = text.replace("\u2029", "\n").split("\n")
-        lines = [
-            f"{prefix}{ln}" if ln and not ln.startswith(prefix) else f"{prefix}{ln}" for ln in lines
-        ]
+        lines = [f"{prefix}{ln}" for ln in lines]
         c.insertText("\n".join(lines))
 
     # ---------- Helpers ----------
