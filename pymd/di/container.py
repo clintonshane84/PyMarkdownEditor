@@ -9,7 +9,7 @@ from pymd.domain.interfaces import (
     ISettingsService,
 )
 
-# Exporter registry: singleton-style instance that tests import as ExporterRegistryInst
+# Exporter registry: **singleton instance** (do NOT call it)
 from pymd.services.exporters.base import ExporterRegistryInst
 from pymd.services.exporters.html_exporter import HtmlExporter
 from pymd.services.exporters.pdf_exporter import PdfExporter
@@ -17,30 +17,28 @@ from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
 
-# Current Qt window (thin view)
+# Thin Qt window
 from pymd.services.ui.main_window import MainWindow
 
-# Optional adapters & presenter: keep functionality if present, but don't hard-fail if not.
+# Optional adapters & presenter (keep optional to avoid hard failures in lean builds)
 try:
     from pymd.services.ui.adapters import QtFileDialogService, QtMessageService  # type: ignore
-except Exception:  # pragma: no cover - optional
+except Exception:  # pragma: no cover
     QtFileDialogService = None  # type: ignore
     QtMessageService = None  # type: ignore
 
 try:
     from pymd.services.ui.presenters import MainPresenter  # type: ignore
-    from pymd.services.ui.presenters.main_presenter import IMainView  # type: ignore
-except Exception:  # pragma: no cover - optional
+except Exception:  # pragma: no cover
     MainPresenter = None  # type: ignore
-    IMainView = None  # type: ignore
 
 
 class Container:
     """
     Lightweight DI container:
-      - Wires default services if not provided
-      - Ensures built-in exporters (html, pdf) are registered in the singleton registry
-      - Optionally wires presenter/adapters if those modules are available
+      - Wires default services if not provided.
+      - Ensures built-in exporters (html, pdf) are registered on the singleton registry.
+      - Optionally wires presenter/adapters if present.
     """
 
     def __init__(
@@ -59,20 +57,29 @@ class Container:
             qsettings or QSettings()
         )
 
-        # Optional UI service ports (Qt-backed adapters) if available
-        self.dialogs = dialogs
-        self.messages = messages
-        if self.dialogs is None and QtFileDialogService is not None:
-            self.dialogs = QtFileDialogService()  # type: ignore[call-arg]
-        if self.messages is None and QtMessageService is not None:
-            self.messages = QtMessageService()  # type: ignore[call-arg]
+        # Exporter registry **singleton instance**
+        self.exporter_registry: IExporterRegistry = ExporterRegistryInst
 
-        self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
-
-        # Register built-in exporters if missing
+        # Ensure built-ins are present on the same instance the tests will read
         self._ensure_builtin_exporters(self.exporter_registry)
 
-    # ---------- Class helpers (parity with previous API) ----------
+        # Optional UI ports
+        self.dialogs = (
+            dialogs
+            if dialogs is not None
+            else (
+                QtFileDialogService() if QtFileDialogService is not None else None  # type: ignore[call-arg]
+            )
+        )
+        self.messages = (
+            messages
+            if messages is not None
+            else (
+                QtMessageService() if QtMessageService is not None else None  # type: ignore[call-arg]
+            )
+        )
+
+    # ---------- Class helper (compat with prior API) ----------
 
     @staticmethod
     def default(
@@ -81,19 +88,13 @@ class Container:
         organization: str = "PyMarkdownEditor",
         application: str = "PyMarkdownEditor",
     ) -> Container:
-        """
-        Build a default container (similar to prior dataclass factory),
-        keeping compatibility with earlier callers.
-        """
         if qsettings is None:
             qsettings = QSettings(organization, application)
         return Container(qsettings=qsettings)
 
     # ---------- Internals ----------
 
-    def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry = None) -> None:
-        if exporter_registry is None:
-            exporter_registry = ExporterRegistryInst()
+    def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry) -> None:
         # html
         try:
             exporter_registry.get("html")
@@ -111,15 +112,10 @@ class Container:
     def build_main_presenter(self, view) -> object:
         """
         Create a MainPresenter bound to a view (if presenter layer is available).
-        Kept for backward compatibility with the previous architecture.
-
-        Returns the presenter instance, or raises RuntimeError if presenter code
-        is not available in this build.
         """
-        if MainPresenter is None:  # pragma: no cover - optional
+        if MainPresenter is None:  # pragma: no cover
             raise RuntimeError("Presenter layer is not available in this build.")
 
-        # We don't hard type here to avoid importing Protocols when unavailable.
         return MainPresenter(  # type: ignore[call-arg]
             view=view,
             renderer=self.renderer,
@@ -127,7 +123,7 @@ class Container:
             settings=self.settings_service,
             messages=self.messages,
             dialogs=self.dialogs,
-            exporter_registry=ExporterRegistryInst(),
+            exporter_registry=self.exporter_registry,
         )
 
     def build_main_window(
@@ -137,32 +133,31 @@ class Container:
         app_title: str = "PyMarkdownEditor",
     ) -> MainWindow:
         """
-        Create the Qt MainWindow, wire services, and (optionally) attach a presenter
-        if presenter layer is available and the view exposes `attach_presenter`.
+        Create the Qt MainWindow, wire services, and (optionally) attach a presenter.
         """
         window = MainWindow(
             renderer=self.renderer,
             file_service=self.file_service,
             settings=self.settings_service,
+            exporter_registry=self.exporter_registry,
             start_path=start_path,
             app_title=app_title,
-            exporter_registry=ExporterRegistryInst(),
         )
 
-        # Attach presenter if both the presenter and adapters exist and the view supports it
-        if MainPresenter is not None and self.messages is not None and self.dialogs is not None:
-            try:
+        # Attach presenter if available
+        try:
+            if MainPresenter is not None and self.messages is not None and self.dialogs is not None:
                 presenter = self.build_main_presenter(view=window)
                 if hasattr(window, "attach_presenter"):
                     window.attach_presenter(presenter)  # type: ignore[attr-defined]
-            except Exception:
-                # Presenter layer is optional; UI works fine without it.
-                pass
+        except Exception:
+            # Presenter layer optional; ignore failures here.
+            pass
 
         return window
 
 
-# --- Convenience top-level function (parity with prior API) ------------------
+# --- Convenience function (parity with prior API) ----------------------------
 
 
 def build_main_window(
@@ -173,9 +168,6 @@ def build_main_window(
     organization: str = "PyMarkdownEditor",
     application: str = "PyMarkdownEditor",
 ) -> MainWindow:
-    """
-    One-call convenience for a ready-to-use window.
-    """
     container = Container.default(
         qsettings=qsettings,
         organization=organization,
