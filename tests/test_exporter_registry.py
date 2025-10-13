@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from pymd.domain.interfaces import IExporter
-from pymd.services.exporters.base import ExporterRegistryInst
+from pymd.services.exporters import ExporterRegistryInst
 
 
 class DummyExporter(IExporter):
@@ -20,15 +20,18 @@ class DummyExporter(IExporter):
 
 def test_registry_register_and_get(tmp_path):
     d = DummyExporter()
-    ExporterRegistryInst.register(d)
-    got = ExporterRegistryInst.get("dummy")
+    exporter_registry = ExporterRegistryInst()
+    exporter_registry.register(d)
+    got = exporter_registry.get("dummy")
     assert got is d
 
 
 def test_registry_all_contains_registered():
-    assert any(exp.name == "dummy" for exp in ExporterRegistryInst.all())
+    exporter_registry = ExporterRegistryInst()
+    assert any(exp.name == "dummy" for exp in exporter_registry.all())
 
 
 def test_registry_get_unknown_key_raises():
     with pytest.raises(KeyError):
-        ExporterRegistryInst.get("__does_not_exist__")
+        exporter_registry = ExporterRegistryInst()
+        exporter_registry.get("__does_not_exist__")
