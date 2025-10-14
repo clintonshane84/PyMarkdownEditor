@@ -27,7 +27,9 @@ def test_registry_register_and_get(tmp_path):
 
 
 def test_registry_all_contains_registered():
+    d = DummyExporter()
     exporter_registry = ExporterRegistryInst()
+    exporter_registry.register(d)
     assert any(exp.name == "dummy" for exp in exporter_registry.all())
 
 
