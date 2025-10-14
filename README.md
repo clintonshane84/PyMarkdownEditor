@@ -170,13 +170,5 @@ pytest -q
 
 ## License
 
-Apache-2.0 © 2025 **[Your Name or Org]**
+Apache-2.0 © 2025 **clintonshane84**
 See [LICENSE](LICENSE).
-
----
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
-
-* **0.1.0** (2025-10-06): first public release — live preview, HTML/PDF export, SOLID/DI refactor, unit tests.

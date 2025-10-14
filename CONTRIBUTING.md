@@ -147,7 +147,7 @@ tests/
 
 ## Branching & Commits
 
-* Branch from `main`:
+* Branch from `master`:
   `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`, `chore/<short-name>`
 * Commit style (suggested):
 

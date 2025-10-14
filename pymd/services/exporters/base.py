@@ -1,26 +1,22 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
-from pymd.domain.interfaces import IExporter
+from pymd.domain.interfaces import IExporter, IExporterRegistry
 
 
-class ExporterRegistry:
+class ExporterRegistryInst(IExporterRegistry):
     """
-    Simple registry/factory for export strategies (OCP).
-    UI can iterate over `all()` to build dynamic export menus.
+    Per-instance exporter registry for tests and DI.
+    Tests expect to call `ExporterRegistryInst()` to get a fresh, empty registry.
     """
 
-    _registry: ClassVar[dict[str, IExporter]] = {}
+    def __init__(self) -> None:
+        self._registry: dict[str, IExporter] = {}
 
-    @classmethod
-    def register(cls, exporter: IExporter) -> None:
-        cls._registry[exporter.name] = exporter
+    def register(self, e: IExporter) -> None:
+        self._registry[e.name] = e
 
-    @classmethod
-    def get(cls, name: str) -> IExporter:
-        return cls._registry[name]
+    def get(self, name: str) -> IExporter:
+        return self._registry[name]
 
-    @classmethod
-    def all(cls) -> list[IExporter]:
-        return list(cls._registry.values())
+    def all(self) -> list[IExporter]:
+        return list(self._registry.values())
