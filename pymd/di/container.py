@@ -58,7 +58,7 @@ class Container:
         )
 
         # Exporter registry **singleton instance**
-        self.exporter_registry: IExporterRegistry = ExporterRegistryInst
+        self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
 
         # Ensure built-ins are present on the same instance the tests will read
         self._ensure_builtin_exporters(self.exporter_registry)
@@ -94,7 +94,9 @@ class Container:
 
     # ---------- Internals ----------
 
-    def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry) -> None:
+    def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry | None) -> None:
+        if exporter_registry is None:
+            exporter_registry = ExporterRegistryInst()
         # html
         try:
             exporter_registry.get("html")
