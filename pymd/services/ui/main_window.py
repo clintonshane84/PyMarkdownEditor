@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import count
 from pathlib import Path
 
 from PyQt6.QtCore import QByteArray, Qt
@@ -142,6 +143,7 @@ class MainWindow(QMainWindow):
         self.act_h1 = QAction("# H1", self, triggered=lambda: self._prefix_line("# "))
         self.act_h2 = QAction("## H2", self, triggered=lambda: self._prefix_line("## "))
         self.act_list = QAction("- list", self, triggered=lambda: self._prefix_line("- "))
+        self.act_img = QAction("Image", self, triggered=lambda: self._insert_image())
 
         # Export actions from injected registry
         self.export_actions: list[QAction] = []
@@ -172,6 +174,7 @@ class MainWindow(QMainWindow):
             self.act_h1,
             self.act_h2,
             self.act_list,
+            self.act_img
         ):
             tb.addAction(a)
 
@@ -212,6 +215,7 @@ class MainWindow(QMainWindow):
             self.act_h1,
             self.act_h2,
             self.act_list,
+            self.act_img
         ):
             formatm.addAction(a)
 
@@ -348,6 +352,20 @@ class MainWindow(QMainWindow):
         lines = text.replace("\u2029", "\n").split("\n")
         lines = [f"{prefix}{ln}" for ln in lines]
         c.insertText("\n".join(lines))
+
+    def _insert_image(self):
+        """Insert an image."""
+        c = self.editor.textCursor()
+        path_str, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image File",
+            "",
+            "JPG (*.jpg);;PNG (*.png);;All files (*)",
+        )
+        str_len = len(path_str)
+        file_title = path_str[(str_len - 4):]
+        c.insertText(f"![{file_title}]({path_str})")
+
 
     # ---------- Helpers ----------
 
