@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QByteArray, Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence, QIcon
 from PyQt6.QtWidgets import (
     QFileDialog,
     QMainWindow,
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
 from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
+from pymd.services.ui.create_link import CreateLinkDialog
 from pymd.utils.constants import MAX_RECENTS
 
 # NEW: Find/Replace dialog
@@ -159,6 +160,7 @@ class MainWindow(QMainWindow):
         self.act_h2 = QAction("H2", self, triggered=lambda: self._prefix_line("## "))
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
         self.act_img = QAction("Image", self, triggered=lambda: self._select_image())
+        self.act_link = QAction("Link", self, triggered=lambda: self._create_link())
 
         # NEW: Find/Replace actions with standard shortcuts (portable)
         self.act_find = QAction("Find", self)
@@ -197,7 +199,7 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         # Quick formatting buttons (optional)
-        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list, self.act_img):
+        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list, self.act_img, self.act_link):
             tbf.addAction(a)
         tbf.addSeparator()
 
@@ -263,6 +265,10 @@ class MainWindow(QMainWindow):
         c = self.editor.textCursor()
         c.insertText(f"<img src=\"{path_str[0]}\" width=\"300\" alt=\"Alt Text\" />")
         self.editor.setTextCursor(c)
+
+    def _create_link(self) -> None:
+        link = CreateLinkDialog(self.editor)
+        link.create_link()
 
     def _surround(self, left: str, right: str) -> None:
         c = self.editor.textCursor()
