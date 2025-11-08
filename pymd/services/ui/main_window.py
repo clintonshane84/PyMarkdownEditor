@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QByteArray, Qt
-from PyQt6.QtGui import QAction, QKeySequence, QIcon
+from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QMainWindow,
     QMenu,
@@ -14,17 +15,14 @@ from PyQt6.QtWidgets import (
     QTextBrowser,
     QTextEdit,
     QToolBar,
-    QApplication,
 )
 
 from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
 from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
 from pymd.services.ui.create_link import CreateLinkDialog
-from pymd.utils.constants import MAX_RECENTS
-
-# NEW: Find/Replace dialog
 from pymd.services.ui.find_replace import FindReplaceDialog
+from pymd.utils.constants import MAX_RECENTS
 
 
 class MainWindow(QMainWindow):

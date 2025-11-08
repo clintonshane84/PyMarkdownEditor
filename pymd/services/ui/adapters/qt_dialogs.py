@@ -7,21 +7,15 @@ from PyQt6 import QtWidgets
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QTextDocument
 from PyQt6.QtWidgets import (
-    QFileDialog,
-    QLineEdit,
-    QLabel,
-    QFormLayout,
-    QGroupBox,
-    QComboBox,
-    QButtonGroup,
-    QDialog,
-    QPushButton,
-    QVBoxLayout,
-    QHBoxLayout,
-    QMessageBox,
-    QTextEdit,
     QCheckBox,
+    QFileDialog,
     QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
 )
 
 from pymd.services.ui.adapters import QtMessageService
@@ -78,8 +72,6 @@ class QtFindReplaceDialogService(QtWidgets.QDialog):
         self.init_ui()
 
     def init_ui(self) -> None:
-        layout = QVBoxLayout()
-
         # Widgets
         self.find_edit = QLineEdit()
         self.replace_edit = QLineEdit()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from PyQt6.QtGui import QKeySequence, QTextCursor, QTextDocument
+from PyQt6.QtGui import QTextCursor, QTextDocument
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-
 
 # -------------------------
 # Ports / Model / Service
