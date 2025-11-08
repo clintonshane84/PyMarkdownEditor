@@ -11,6 +11,7 @@ from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
 from pymd.services.ui.main_window import MainWindow
+from pymd.utils.constants import MAX_RECENTS
 
 # ------------------------------
 # Fakes & helpers
@@ -350,6 +351,47 @@ def test_replace_one_and_all(window: MainWindow, qapp):
     assert "ALPHA beta ALPHA" == window.editor.toPlainText()
 
 
+# Extra find/replace edges from review
+
+
+def test_find_whole_word_ignores_substrings_with_punct(window: MainWindow, qapp):
+    window.editor.setPlainText("foo, foobar foo.")
+    d = window.find_dialog
+    d.find_edit.setText("foo")
+    d.word_cb.setChecked(True)
+    d.case_cb.setChecked(False)
+    d.wrap_cb.setChecked(True)
+
+    hits = []
+    for _ in range(3):
+        d.find(True)
+        qapp.processEvents()
+        if window.editor.textCursor().hasSelection():
+            hits.append(window.editor.textCursor().selectedText())
+        else:
+            break
+    assert hits == ["foo", "foo"]
+
+
+def test_replace_one_when_not_on_match_finds_next(window: MainWindow, qapp):
+    window.editor.setPlainText("alpha beta alpha")
+    d = window.find_dialog
+    d.find_edit.setText("alpha")
+    d.replace_edit.setText("ALPHA")
+
+    # place caret at start (no selection on a match)
+    c = window.editor.textCursor()
+    c.setPosition(0)
+    window.editor.setTextCursor(c)
+
+    d.replace_one()
+    qapp.processEvents()
+
+    # first call shouldn't replace; it should have moved selection to first match
+    assert window.editor.toPlainText() == "alpha beta alpha"
+    assert window.editor.textCursor().hasSelection()
+
+
 # ------------------------------
 # Image & Link actions
 # ------------------------------
@@ -388,3 +430,196 @@ def test_create_link_invokes_dialog(window: MainWindow, qapp, monkeypatch):
     window.act_link.trigger()
     qapp.processEvents()
     assert called["ok"] is True
+
+
+# ------------------------------
+# NEW: Inline code & code block actions
+# ------------------------------
+
+
+def test_act_code_wraps_selection_or_inserts_tick(window: MainWindow, qapp):
+    # Wraps selection with backticks
+    window.editor.setPlainText("abc")
+    c = window.editor.textCursor()
+    c.setPosition(1)  # after 'a'
+    c.setPosition(3, c.MoveMode.KeepAnchor)  # select 'bc'
+    window.editor.setTextCursor(c)
+    window.act_code.trigger()
+    qapp.processEvents()
+    assert window.editor.toPlainText() == "a`bc`"
+
+    # With no selection, inserts a single backtick at caret
+    window.editor.setPlainText("hi")
+    c = window.editor.textCursor()
+    c.movePosition(c.MoveOperation.End)
+    window.editor.setTextCursor(c)
+    window.act_code.trigger()
+    qapp.processEvents()
+    assert window.editor.toPlainText().endswith("`")
+    assert window.editor.toPlainText() == "hi`"
+
+
+def test_act_code_block_inserts_fence_with_lang_and_places_caret(
+    monkeypatch, window: MainWindow, qapp
+):
+    # Force language selection to 'python'
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QInputDialog.getItem",
+        lambda *a, **k: ("python", True),
+    )
+
+    window.editor.setPlainText("start")
+    c = window.editor.textCursor()
+    c.movePosition(c.MoveOperation.End)
+    window.editor.setTextCursor(c)
+
+    window.act_code_block.trigger()
+    qapp.processEvents()
+
+    text = window.editor.toPlainText()
+    # Newline is inserted before fence if not already at BOL
+    assert text.endswith("```python\n\n```\n")
+    # Caret should be on the blank line between fences
+    cur = window.editor.textCursor()
+    assert cur.block().text() == ""  # blank line inside the block
+
+
+def test_act_code_block_inserts_fence_without_lang_when_none_selected(
+    monkeypatch, window: MainWindow, qapp
+):
+    # User selects "(none)" i.e., empty string
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QInputDialog.getItem",
+        lambda *a, **k: ("", True),
+    )
+
+    window.editor.setPlainText("")
+    window.act_code_block.trigger()
+    qapp.processEvents()
+
+    text = window.editor.toPlainText()
+    # No language suffix on the opening fence
+    assert text.startswith("```\n\n```\n")
+    # Caret on the blank line inside the block
+    cur = window.editor.textCursor()
+    assert cur.block().text() == ""
+
+
+# ------------------------------
+# Review “quick wins”: cancel paths, export errors, recents policy, status bar
+# ------------------------------
+
+
+def test_open_dialog_cancel(monkeypatch, window: MainWindow):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QFileDialog.getOpenFileName",
+        lambda *a, **k: ("", ""),  # canceled
+    )
+    window.editor.setPlainText("x")
+    window._open_dialog()
+    # nothing changed (still untitled, still has our text)
+    assert window.doc.path is None
+    assert window.editor.toPlainText() == "x"
+
+
+def test_save_as_cancel(monkeypatch, window: MainWindow):
+    window.editor.setPlainText("x")
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
+        lambda *a, **k: ("", ""),  # canceled
+    )
+    window._save_as()
+    assert window.doc.path is None  # not changed
+
+
+def test_export_cancel(monkeypatch, window: MainWindow):
+    window.editor.setPlainText("# hi")
+    # ensure at least one exporter action exists
+    assert window.export_actions
+    act = window.export_actions[0]
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
+        lambda *a, **k: ("", ""),  # canceled
+    )
+    # should no-op without exceptions
+    act.trigger()
+
+
+def test_export_failure_shows_error(monkeypatch, qapp, tmp_path):
+    class BoomExporter(DummyExporter):
+        @property
+        def name(self) -> str:
+            return "boom"
+
+        @property
+        def label(self) -> str:
+            return "Export BOOM"
+
+        def export(self, html: str, out_path: Path) -> None:
+            raise RuntimeError("boom")
+
+    # Build a fresh window with a registry that includes a failing exporter
+    reg = FakeExporterRegistry()
+    reg.register(DummyExporter())
+    reg.register(BoomExporter())
+
+    qs = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    w = MainWindow(
+        renderer=MarkdownRenderer(),
+        file_service=FileService(),
+        settings=SettingsService(qs),
+        exporter_registry=reg,
+        app_title="TestBoom",
+    )
+    w.show()
+    qapp.processEvents()
+    w.editor.setPlainText("x")
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.critical",
+        lambda *a, **k: called.__setitem__("n", called["n"] + 1),
+    )
+    out = tmp_path / "out.boom"
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
+        lambda *a, **k: (str(out), ""),
+    )
+
+    # Use the last export action (BoomExporter)
+    assert w.export_actions
+    w.export_actions[-1].trigger()
+    assert called["n"] == 1
+
+
+def test_recents_dedup_and_order(window: MainWindow, tmp_path: Path):
+    a = tmp_path / "a.md"
+    b = tmp_path / "b.md"
+    a.write_text("a", encoding="utf-8")
+    b.write_text("b", encoding="utf-8")
+
+    window._open_path(a)
+    window._open_path(b)
+    window._open_path(a)  # bring to front again
+
+    assert window.recents[:2] == [str(a), str(b)]
+
+
+def test_recents_max_enforced(window: MainWindow, tmp_path: Path):
+    files = []
+    for i in range(0, 2 * MAX_RECENTS):
+        p = tmp_path / f"f{i}.md"
+        p.write_text("x", encoding="utf-8")
+        window._open_path(p)
+        files.append(str(p))
+    assert len(window.recents) == MAX_RECENTS
+    # newest first
+    assert window.recents[0] == files[-1]
+
+
+def test_status_message_on_save(window: MainWindow, tmp_path: Path):
+    p = tmp_path / "z.md"
+    window.editor.setPlainText("ok")
+    assert window._write_to(p)
+    # QStatusBar text is transient; check it is non-empty immediately
+    assert window.statusBar().currentMessage() != ""

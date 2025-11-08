@@ -7,6 +7,7 @@ from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QInputDialog,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -154,7 +155,10 @@ class MainWindow(QMainWindow):
         # Reintroduced formatting actions
         self.act_bold = QAction("B", self, triggered=lambda: self._surround("**", "**"))
         self.act_italic = QAction("i", self, triggered=lambda: self._surround("*", "*"))
-        self.act_code = QAction("`codeblock`", self, triggered=lambda: self._surround("`", "`"))
+        self.act_code = QAction("`code`", self, triggered=lambda: self._insert_inline_code())
+        self.act_code_block = QAction(
+            "codeblock", self, triggered=lambda: self._insert_code_block()
+        )
         self.act_h1 = QAction("H1", self, triggered=lambda: self._prefix_line("# "))
         self.act_h2 = QAction("H2", self, triggered=lambda: self._prefix_line("## "))
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
@@ -202,6 +206,7 @@ class MainWindow(QMainWindow):
             self.act_bold,
             self.act_italic,
             self.act_code,
+            self.act_code_block,
             self.act_h1,
             self.act_h2,
             self.act_list,
@@ -241,6 +246,7 @@ class MainWindow(QMainWindow):
             self.act_bold,
             self.act_italic,
             self.act_code,
+            self.act_code_block,
             self.act_h1,
             self.act_h2,
             self.act_list,
@@ -290,6 +296,83 @@ class MainWindow(QMainWindow):
             return
         sel = c.selectedText()
         c.insertText(f"{left}{sel}{right}")
+        self.editor.setTextCursor(c)
+
+    def _insert_inline_code(self) -> None:
+        """
+        If there is a selection: surround it with a single backtick each side.
+        If there isn't: insert a single backtick at the caret (open inline code).
+        """
+        c = self.editor.textCursor()
+        if c.hasSelection():
+            sel = c.selectedText()
+            c.insertText(f"`{sel}`")
+        else:
+            c.insertText("`")
+        self.editor.setTextCursor(c)
+
+    def _insert_code_block(self) -> None:
+        """
+        Ask for a language; insert a fenced code block on new lines:
+            ```<lang-if-chosen>
+
+            ```
+        Place caret on the blank line inside the block.
+        """
+        languages = [
+            "",  # (none)
+            "php",
+            "javascript",
+            "typescript",
+            "java",
+            "c",
+            "cpp",
+            "csharp",
+            "python",
+            "ruby",
+            "scala",
+        ]
+
+        lang, ok = QInputDialog.getItem(
+            self, "Code block language", "Select language (optional):", languages, 0, False
+        )
+        if not ok:
+            return
+
+        lang_suffix = lang.strip()
+        if lang_suffix:
+            first_line = f"```{lang_suffix}"
+        else:
+            first_line = "```"
+
+        c = self.editor.textCursor()
+        c.beginEditBlock()
+        try:
+            # Ensure we start on a new line for the opening fence
+            # If we're not already at start of a line, insert a newline.
+            if c.position() > 0:
+                # Peek previous char; safest is to move, read, and restore
+                c.movePosition(c.MoveOperation.Left, c.MoveMode.KeepAnchor, 1)
+                prev = c.selectedText()
+                c.clearSelection()
+                if prev != "\u2029" and prev != "\n":  # Qt block sep or newline
+                    c.insertText("\n")
+
+            # Insert fenced block:
+            # ```<lang>
+            #
+            # ```
+            c.insertText(first_line + "\n\n```\n")
+
+            # Move caret back to the blank line between fences
+            # After insert caret is at end; go up two blocks:
+            c.movePosition(c.MoveOperation.PreviousBlock)  # closing fence
+            c.movePosition(c.MoveOperation.PreviousBlock)  # blank line
+            # Put caret at end of the blank line (ready to type)
+            c.movePosition(c.MoveOperation.EndOfBlock)
+        finally:
+            c.endEditBlock()
+
         self.editor.setTextCursor(c)
 
     def _prefix_line(self, prefix: str) -> None:
