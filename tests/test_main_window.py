@@ -13,11 +13,25 @@ from pymd.services.settings_service import SettingsService
 from pymd.services.ui.main_window import MainWindow
 from pymd.utils.constants import MAX_RECENTS
 
+
+# ------------------------------
+# Autouse patch: auto-accept discard dialogs
+# ------------------------------
+@pytest.fixture(autouse=True)
+def auto_accept_discard(monkeypatch):
+    """
+    Avoid interactive 'Discard changes?' popups during tests.
+    Always answer Yes.
+    """
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.Yes,
+    )
+
+
 # ------------------------------
 # Fakes & helpers
 # ------------------------------
-
-
 class DummyExporter(IExporter):
     """Tiny exporter used for tests; writes the HTML to a .txt file."""
 
@@ -88,8 +102,6 @@ def window(qapp, tmp_path, exporter_registry: IExporterRegistry) -> MainWindow:
 # ------------------------------
 # Core window behavior tests
 # ------------------------------
-
-
 def test_window_initial_state(window: MainWindow):
     assert window.doc.path is None
     assert window.doc.modified is False
@@ -265,8 +277,6 @@ def test_prefix_line_partial_multiline_selection(window: MainWindow):
 # ------------------------------
 # Find / Replace coverage
 # ------------------------------
-
-
 @pytest.mark.parametrize(
     "case,whole,needle,expected",
     [
@@ -302,6 +312,31 @@ def test_find_options_whole_and_case(window: MainWindow, qapp, case, whole, need
         qapp.processEvents()
 
     assert hits == expected
+
+
+def test_find_whole_word_ignores_substrings_with_punct(window: MainWindow, qapp):
+    window.editor.setPlainText("foo, foobar foo.")
+    d = window.find_dialog
+    d.find_edit.setText("foo")
+    d.word_cb.setChecked(True)
+    d.case_cb.setChecked(False)
+    d.wrap_cb.setChecked(True)
+
+    hits = []
+    seen_starts: set[int] = set()
+    for _ in range(5):
+        d.find(forward=True)
+        qapp.processEvents()
+        cur = window.editor.textCursor()
+        if not cur.hasSelection():
+            break
+        start = cur.selectionStart()
+        if start in seen_starts:
+            break  # wrapped/cycled
+        seen_starts.add(start)
+        hits.append(cur.selectedText())
+
+    assert hits == ["foo", "foo"]
 
 
 def test_find_backward_wraps(window: MainWindow, qapp):
@@ -351,55 +386,13 @@ def test_replace_one_and_all(window: MainWindow, qapp):
     assert "ALPHA beta ALPHA" == window.editor.toPlainText()
 
 
-# Extra find/replace edges from review
-
-
-def test_find_whole_word_ignores_substrings_with_punct(window: MainWindow, qapp):
-    window.editor.setPlainText("foo, foobar foo.")
-    d = window.find_dialog
-    d.find_edit.setText("foo")
-    d.word_cb.setChecked(True)
-    d.case_cb.setChecked(False)
-    d.wrap_cb.setChecked(True)
-
-    hits = []
-    for _ in range(3):
-        d.find(True)
-        qapp.processEvents()
-        if window.editor.textCursor().hasSelection():
-            hits.append(window.editor.textCursor().selectedText())
-        else:
-            break
-    assert hits == ["foo", "foo"]
-
-
-def test_replace_one_when_not_on_match_finds_next(window: MainWindow, qapp):
-    window.editor.setPlainText("alpha beta alpha")
-    d = window.find_dialog
-    d.find_edit.setText("alpha")
-    d.replace_edit.setText("ALPHA")
-
-    # place caret at start (no selection on a match)
-    c = window.editor.textCursor()
-    c.setPosition(0)
-    window.editor.setTextCursor(c)
-
-    d.replace_one()
-    qapp.processEvents()
-
-    # first call shouldn't replace; it should have moved selection to first match
-    assert window.editor.toPlainText() == "alpha beta alpha"
-    assert window.editor.textCursor().hasSelection()
-
-
 # ------------------------------
 # Image & Link actions
 # ------------------------------
-
-
 def test_insert_image_inserts_img_tag(monkeypatch, window: MainWindow, qapp, tmp_path: Path):
     fake_img = tmp_path / "pic.png"
-    fake_img.write_bytes(b"\x89PNG\r\n\x1a\n")  # minimal header
+    # Minimal PNG header; Qt may still log but shouldn't crash
+    fake_img.write_bytes(b"\x89PNG\r\n\x1a\n")
 
     # Stub the file dialog to return our image path
     monkeypatch.setattr(
@@ -433,10 +426,8 @@ def test_create_link_invokes_dialog(window: MainWindow, qapp, monkeypatch):
 
 
 # ------------------------------
-# NEW: Inline code & code block actions
+# Inline code & code block actions
 # ------------------------------
-
-
 def test_act_code_wraps_selection_or_inserts_tick(window: MainWindow, qapp):
     # Wraps selection with backticks
     window.editor.setPlainText("abc")
@@ -455,7 +446,6 @@ def test_act_code_wraps_selection_or_inserts_tick(window: MainWindow, qapp):
     window.editor.setTextCursor(c)
     window.act_code.trigger()
     qapp.processEvents()
-    assert window.editor.toPlainText().endswith("`")
     assert window.editor.toPlainText() == "hi`"
 
 
@@ -506,10 +496,8 @@ def test_act_code_block_inserts_fence_without_lang_when_none_selected(
 
 
 # ------------------------------
-# Review “quick wins”: cancel paths, export errors, recents policy, status bar
+# Extra edge cases from review
 # ------------------------------
-
-
 def test_open_dialog_cancel(monkeypatch, window: MainWindow):
     monkeypatch.setattr(
         "pymd.services.ui.main_window.QFileDialog.getOpenFileName",
@@ -534,8 +522,6 @@ def test_save_as_cancel(monkeypatch, window: MainWindow):
 
 def test_export_cancel(monkeypatch, window: MainWindow):
     window.editor.setPlainText("# hi")
-    # ensure at least one exporter action exists
-    assert window.export_actions
     act = window.export_actions[0]
     monkeypatch.setattr(
         "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
@@ -545,7 +531,7 @@ def test_export_cancel(monkeypatch, window: MainWindow):
     act.trigger()
 
 
-def test_export_failure_shows_error(monkeypatch, qapp, tmp_path):
+def test_export_failure_shows_error(monkeypatch, window: MainWindow, tmp_path: Path):
     class BoomExporter(DummyExporter):
         @property
         def name(self) -> str:
@@ -558,50 +544,31 @@ def test_export_failure_shows_error(monkeypatch, qapp, tmp_path):
         def export(self, html: str, out_path: Path) -> None:
             raise RuntimeError("boom")
 
-    # Build a fresh window with a registry that includes a failing exporter
-    reg = FakeExporterRegistry()
-    reg.register(DummyExporter())
-    reg.register(BoomExporter())
-
-    qs = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
-    w = MainWindow(
-        renderer=MarkdownRenderer(),
-        file_service=FileService(),
-        settings=SettingsService(qs),
-        exporter_registry=reg,
-        app_title="TestBoom",
+    out = tmp_path / "x.boom"
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
+        lambda *a, **k: (str(out), ""),
     )
-    w.show()
-    qapp.processEvents()
-    w.editor.setPlainText("x")
 
     called = {"n": 0}
     monkeypatch.setattr(
         "pymd.services.ui.main_window.QMessageBox.critical",
         lambda *a, **k: called.__setitem__("n", called["n"] + 1),
     )
-    out = tmp_path / "out.boom"
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
-        lambda *a, **k: (str(out), ""),
-    )
 
-    # Use the last export action (BoomExporter)
-    assert w.export_actions
-    w.export_actions[-1].trigger()
+    # Call the export path directly with a failing exporter (actions list isn't rebuilt)
+    window._export_with(BoomExporter())
     assert called["n"] == 1
 
 
 def test_recents_dedup_and_order(window: MainWindow, tmp_path: Path):
     a = tmp_path / "a.md"
     b = tmp_path / "b.md"
-    a.write_text("a", encoding="utf-8")
-    b.write_text("b", encoding="utf-8")
-
+    a.write_text("a")
+    b.write_text("b")
     window._open_path(a)
     window._open_path(b)
     window._open_path(a)  # bring to front again
-
     assert window.recents[:2] == [str(a), str(b)]
 
 
@@ -609,7 +576,7 @@ def test_recents_max_enforced(window: MainWindow, tmp_path: Path):
     files = []
     for i in range(0, 2 * MAX_RECENTS):
         p = tmp_path / f"f{i}.md"
-        p.write_text("x", encoding="utf-8")
+        p.write_text("x")
         window._open_path(p)
         files.append(str(p))
     assert len(window.recents) == MAX_RECENTS

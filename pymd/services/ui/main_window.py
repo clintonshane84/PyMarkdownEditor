@@ -350,11 +350,14 @@ class MainWindow(QMainWindow):
         try:
             # Ensure we start on a new line for the opening fence
             # If we're not already at start of a line, insert a newline.
+
             if c.position() > 0:
-                # Peek previous char; safest is to move, read, and restore
+                # Peek previous char; save pos, read, then restore pos before inserting
+                original_pos = c.position()
                 c.movePosition(c.MoveOperation.Left, c.MoveMode.KeepAnchor, 1)
                 prev = c.selectedText()
                 c.clearSelection()
+                c.setPosition(original_pos)
                 if prev != "\u2029" and prev != "\n":  # Qt block sep or newline
                     c.insertText("\n")
 
