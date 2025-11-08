@@ -13,7 +13,9 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QTextEdit,
-    QVBoxLayout, QWidget, QApplication,
+    QVBoxLayout,
+    QWidget,
+    QApplication,
 )
 
 
@@ -21,13 +23,16 @@ from PyQt6.QtWidgets import (
 # Ports / Model / Service
 # -------------------------
 
+
 class EditorPort(Protocol):
     def textCursor(self) -> QTextCursor: ...
     def setTextCursor(self, c: QTextCursor) -> None: ...
     def document(self): ...
 
+
 class QtTextEditorAdapter:
     """Narrow adapter to satisfy EditorPort; isolates service from full QTextEdit API."""
+
     def __init__(self, edit: QTextEdit):
         self._e = edit
 

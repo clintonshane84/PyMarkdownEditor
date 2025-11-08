@@ -6,8 +6,23 @@ from typing import Any
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QTextDocument
-from PyQt6.QtWidgets import QFileDialog, QLineEdit, QLabel, QFormLayout, QGroupBox, QComboBox, QButtonGroup, QDialog, \
-    QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QTextEdit, QCheckBox, QGridLayout
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QLineEdit,
+    QLabel,
+    QFormLayout,
+    QGroupBox,
+    QComboBox,
+    QButtonGroup,
+    QDialog,
+    QPushButton,
+    QVBoxLayout,
+    QHBoxLayout,
+    QMessageBox,
+    QTextEdit,
+    QCheckBox,
+    QGridLayout,
+)
 
 from pymd.services.ui.adapters import QtMessageService
 from pymd.services.ui.ports.dialogs import IFileDialogService
@@ -111,13 +126,12 @@ class QtFindReplaceDialogService(QtWidgets.QDialog):
         self.replace_btn.click().connect(self.replace_btn)
         self.replace_all_btn.click().connect(self.replace_all_btn)
 
-
     def find_next(self):
         if self.editor and self.find_input.text():
             search_string = self.find_input.text()
-            flags = QTextDocument.FindFlag(0) # No flags for now, can add case-sensitivity etc
+            flags = QTextDocument.FindFlag(0)  # No flags for now, can add case-sensitivity etc
             found = self.editor.find(search_string, flags)
             if not found:
-                QtMessageService().info(None, "No results", f"Could not find text: '{search_string}'")
-
-
+                QtMessageService().info(
+                    None, "No results", f"Could not find text: '{search_string}'"
+                )

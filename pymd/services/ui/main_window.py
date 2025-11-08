@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (
     QStatusBar,
     QTextBrowser,
     QTextEdit,
-    QToolBar, QApplication,
+    QToolBar,
+    QApplication,
 )
 
 from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
@@ -101,11 +102,9 @@ class MainWindow(QMainWindow):
 
     # ---------- UI creation ----------
     def _build_actions(self):
-        self.exit_action = QAction(
-            '&Exit'
-        )
-        self.exit_action.setShortcut('Ctrl+Q')
-        self.exit_action.setStatusTip('Exit application')
+        self.exit_action = QAction("&Exit")
+        self.exit_action.setShortcut("Ctrl+Q")
+        self.exit_action.setStatusTip("Exit application")
         self.exit_action.triggered.connect(QApplication.instance().quit)
 
         # File actions
@@ -201,7 +200,16 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         # Quick formatting buttons (optional)
-        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list, self.act_img, self.act_link):
+        for a in (
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+            self.act_img,
+            self.act_link,
+        ):
             tbf.addAction(a)
         tbf.addSeparator()
 
@@ -231,7 +239,14 @@ class MainWindow(QMainWindow):
 
         editm = m.addMenu("&Edit")
         # Formatting helpers
-        for a in (self.act_bold, self.act_italic, self.act_code, self.act_h1, self.act_h2, self.act_list):
+        for a in (
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+        ):
             editm.addAction(a)
         editm.addSeparator()
         # Find/Replace
@@ -265,7 +280,7 @@ class MainWindow(QMainWindow):
             "PNG (*.png);;JPEG (*.jpeg *.jpg);;All files (*)",
         )
         c = self.editor.textCursor()
-        c.insertText(f"<img src=\"{path_str[0]}\" width=\"300\" alt=\"Alt Text\" />")
+        c.insertText(f'<img src="{path_str[0]}" width="300" alt="Alt Text" />')
         self.editor.setTextCursor(c)
 
     def _create_link(self) -> None:

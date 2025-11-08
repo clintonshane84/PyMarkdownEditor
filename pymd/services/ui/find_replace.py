@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 # Ports / Model / Service
 # -------------------------
 
+
 class EditorPort(Protocol):
     def textCursor(self) -> QTextCursor: ...
     def setTextCursor(self, c: QTextCursor) -> None: ...
@@ -46,6 +47,7 @@ class SearchEngine(Protocol):
 
 class PlainTextSearchService:
     """Pure search/replace policy; UI-agnostic."""
+
     def __init__(self, editor: EditorPort):
         self._ed = editor
 
@@ -67,8 +69,7 @@ class PlainTextSearchService:
         if opt.wrap:
             cur = self._ed.textCursor()
             cur.movePosition(
-                QTextCursor.MoveOperation.Start if opt.forward
-                else QTextCursor.MoveOperation.End
+                QTextCursor.MoveOperation.Start if opt.forward else QTextCursor.MoveOperation.End
             )
             self._ed.setTextCursor(cur)
             return self._ed.find(opt.text, self._flags(opt))
@@ -113,6 +114,7 @@ class PlainTextSearchService:
 
 class QtTextEditorAdapter:
     """Narrow adapter to satisfy EditorPort; isolates service from full QTextEdit API."""
+
     def __init__(self, edit: QTextEdit):
         self._e = edit
 
@@ -133,8 +135,10 @@ class QtTextEditorAdapter:
 # Dialog (View/Controller)
 # -------------------------
 
+
 class FindReplaceDialog(QDialog):
     """Non-modal find/replace dialog backed by PlainTextSearchService."""
+
     def __init__(self, editor: QTextEdit, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Find / Replace")
@@ -147,7 +151,8 @@ class FindReplaceDialog(QDialog):
         self.replace_edit = QLineEdit()
         self.case_cb = QCheckBox("Match case")
         self.word_cb = QCheckBox("Whole words")
-        self.wrap_cb = QCheckBox("Wrap around"); self.wrap_cb.setChecked(True)
+        self.wrap_cb = QCheckBox("Wrap around")
+        self.wrap_cb.setChecked(True)
 
         self.find_prev_btn = QPushButton("Find Previous")
         self.find_next_btn = QPushButton("Find Next")
