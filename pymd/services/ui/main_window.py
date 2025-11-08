@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QByteArray, Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -294,26 +294,43 @@ class MainWindow(QMainWindow):
 
     def _prefix_line(self, prefix: str) -> None:
         c = self.editor.textCursor()
+        doc = self.editor.document()
+
+        # No selection → prefix current line and return.
         if not c.hasSelection():
-            # Prefix current line
+            c.beginEditBlock()
             c.movePosition(c.MoveOperation.StartOfLine)
             c.insertText(prefix)
+            c.endEditBlock()
             self.editor.setTextCursor(c)
             return
-        # Multi-line: expand to full lines and prefix each
-        start = c.selectionStart()
-        end = c.selectionEnd()
-        c.setPosition(start)
-        c.movePosition(c.MoveOperation.StartOfLine)
-        while c.position() <= end:
-            c.insertText(prefix)
-            # Move to next line start
-            c.movePosition(c.MoveOperation.EndOfLine)
-            if c.atBlockEnd():
-                c.movePosition(c.MoveOperation.NextBlock)
-                c.movePosition(c.MoveOperation.StartOfLine)
-            if c.position() > end:
-                break
+
+        # Selection → prefix every line that intersects the selection.
+        start = min(c.selectionStart(), c.selectionEnd())
+        end = max(c.selectionStart(), c.selectionEnd())
+
+        # Make sure the last block is included even if selection ends at a block boundary
+        # or at the very end of the document.
+        end_inclusive_pos = max(0, end - 1)
+
+        start_block = doc.findBlock(start)
+        end_block = doc.findBlock(end_inclusive_pos)
+
+        cur = QTextCursor(start_block)
+        cur.beginEditBlock()
+        try:
+            block = start_block
+            while block.isValid():
+                # Move to the beginning of this block and insert the prefix
+                cur.setPosition(block.position())
+                cur.insertText(prefix)
+                if block == end_block:
+                    break
+                block = block.next()
+        finally:
+            cur.endEditBlock()
+
+        # Keep the original selection/caret behavior predictable
         self.editor.setTextCursor(c)
 
     def _new_file(self):

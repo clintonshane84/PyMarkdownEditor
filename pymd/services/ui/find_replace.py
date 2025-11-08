@@ -90,20 +90,35 @@ class PlainTextSearchService:
         if not opt.text:
             return 0
 
-        # Deterministic: start at doc beginning
-        start = self._ed.textCursor()
-        start.movePosition(QTextCursor.MoveOperation.Start)
-        self._ed.setTextCursor(start)
+        # Start deterministically at beginning (or end if backward),
+        # but do NOT allow wrap during the loop to avoid re-hitting replaced text.
+        cur = self._ed.textCursor()
+        cur.movePosition(
+            QTextCursor.MoveOperation.Start if opt.forward else QTextCursor.MoveOperation.End
+        )
+        self._ed.setTextCursor(cur)
+
+        # Use a no-wrap copy of options inside the loop.
+        opt_nowrap = SearchOptions(
+            text=opt.text,
+            replace=opt.replace,
+            case_sensitive=opt.case_sensitive,
+            whole_words=opt.whole_words,
+            wrap=False,  # <-- critical
+            forward=opt.forward,
+        )
 
         block = QTextCursor(self._ed.document())
         block.beginEditBlock()
         try:
             count = 0
-            while self.find_once(opt):
+            # Find next occurrence without wrapping
+            while self._ed.find(opt_nowrap.text, self._flags(opt_nowrap)):
                 cur = self._ed.textCursor()
                 if not cur.hasSelection():
                     break
-                cur.insertText(opt.replace)
+                # Replace current selection; cursor ends after inserted text
+                cur.insertText(opt_nowrap.replace)
                 self._ed.setTextCursor(cur)
                 count += 1
             return count
