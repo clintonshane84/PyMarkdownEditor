@@ -26,13 +26,27 @@ class EditorPort(Protocol):
     def setTextCursor(self, c: QTextCursor) -> None: ...
     def document(self): ...
 
+class QtTextEditorAdapter:
+    """Narrow adapter to satisfy EditorPort; isolates service from full QTextEdit API."""
+    def __init__(self, edit: QTextEdit):
+        self._e = edit
+
+    def textCursor(self) -> QTextCursor:
+        return self._e.textCursor()
+
+    def setTextCursor(self, c: QTextCursor) -> None:
+        self._e.setTextCursor(c)
+
+    def document(self):
+        return self._e.document()
+
 
 class CreateLinkDialog(QDialog):
-    def __init__(self, editor: EditorPort, parent=None):
+    def __init__(self, editor: QTextEdit, parent=None):
         super().__init__(parent)
-        self._ed = editor
         self.setWindowTitle("Create Link")
         self.setModal(False)
+        self._ed = QtTextEditorAdapter(editor)
 
         # Widgets
         self.url_edit = QLineEdit()
@@ -53,13 +67,13 @@ class CreateLinkDialog(QDialog):
         buttons.addStretch(1)
         buttons.addWidget(self.close_btn)
 
-        root = QVBoxLayout()
+        root = QVBoxLayout(self)
         root.addLayout(form)
         root.addLayout(buttons)
 
         # Signals
-        self.create_link_btn.clicked.connect(lambda: self.create_link(self.url_edit.text(), self.link_title.text()))
-        self.close_btn.clicked.connect(QApplication.instance().quit)
+        self.create_link_btn.clicked.connect(lambda: self.create_link(self._ed))
+        self.close_btn.clicked.connect(self.close)
 
     # Public API used by MainWindow wiring (simple and explicit)
     def show_create_link(self) -> None:
@@ -69,7 +83,8 @@ class CreateLinkDialog(QDialog):
         self.url_edit.setFocus()
         self.url_edit.selectAll()
 
-    def create_link(self) -> None:
-        cur = self._ed.textCursor()
+    def create_link(self, editor: EditorPort) -> None:
+        cur = editor.textCursor()
         cur.insertText(f"[{self.link_title.text()}]({self.url_edit.text()})")
-        self._ed.setTextCursor(cur)
+        editor.setTextCursor(cur)
+        self.close()

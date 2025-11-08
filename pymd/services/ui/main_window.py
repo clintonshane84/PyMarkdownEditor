@@ -71,6 +71,8 @@ class MainWindow(QMainWindow):
         # Non-modal Find/Replace dialog
         self.find_dialog = FindReplaceDialog(self.editor, self)
 
+        self.link_dialog = CreateLinkDialog(self.editor, self)
+
         # Signals
         self.editor.textChanged.connect(self._on_text_changed)
 
@@ -267,8 +269,7 @@ class MainWindow(QMainWindow):
         self.editor.setTextCursor(c)
 
     def _create_link(self) -> None:
-        link = CreateLinkDialog(self.editor)
-        link.create_link()
+        self.link_dialog.show_create_link()
 
     def _surround(self, left: str, right: str) -> None:
         c = self.editor.textCursor()
