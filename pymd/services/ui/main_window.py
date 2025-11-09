@@ -166,7 +166,9 @@ class MainWindow(QMainWindow):
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
         self.act_img = QAction("Image", self, triggered=lambda: self._select_image())
         self.act_link = QAction("Link", self, triggered=lambda: self._create_link())
-        self.act_table = QAction("Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table)
+        self.act_table = QAction(
+            "Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table
+        )
 
         # NEW: Find/Replace actions with standard shortcuts (portable)
         self.act_find = QAction("Find", self)

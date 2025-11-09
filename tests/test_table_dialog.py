@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QTextEdit
 
 from pymd.services.ui.table_dialog import TableDialog
@@ -50,10 +49,7 @@ def test_generate_table_with_header_left_align(dialog: TableDialog):
     table = dialog._generate_table()
 
     expected = (
-        "| Column 1 | Column 2 | Column 3 |\n"
-        "| --- | --- | --- |\n"
-        "|   |   |   |\n"
-        "|   |   |   |"
+        "| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|   |   |   |\n|   |   |   |"
     )
     assert table == expected
 
@@ -67,11 +63,7 @@ def test_generate_table_with_header_center_align(dialog: TableDialog):
 
     table = dialog._generate_table()
 
-    expected = (
-        "| Column 1 | Column 2 |\n"
-        "| :---: | :---: |\n"
-        "|   |   |"
-    )
+    expected = "| Column 1 | Column 2 |\n| :---: | :---: |\n|   |   |"
     assert table == expected
 
 
@@ -84,11 +76,7 @@ def test_generate_table_with_header_right_align(dialog: TableDialog):
 
     table = dialog._generate_table()
 
-    expected = (
-        "| Column 1 | Column 2 |\n"
-        "| ---: | ---: |\n"
-        "|   |   |"
-    )
+    expected = "| Column 1 | Column 2 |\n| ---: | ---: |\n|   |   |"
     assert table == expected
 
 
@@ -100,12 +88,7 @@ def test_generate_table_without_header(dialog: TableDialog):
 
     table = dialog._generate_table()
 
-    expected = (
-        "|   |   |\n"
-        "| --- | --- |\n"
-        "|   |   |\n"
-        "|   |   |"
-    )
+    expected = "|   |   |\n| --- | --- |\n|   |   |\n|   |   |"
     assert table == expected
 
 
@@ -117,10 +100,7 @@ def test_generate_table_minimum_size(dialog: TableDialog):
 
     table = dialog._generate_table()
 
-    expected = (
-        "| Column 1 |\n"
-        "| --- |"
-    )
+    expected = "| Column 1 |\n| --- |"
     assert table == expected
 
 
@@ -201,7 +181,9 @@ def test_insert_table_cursor_positioning_with_header(qapp, editor: QTextEdit, di
     assert "Column 1" in line or "Column 2" in line
 
 
-def test_insert_table_cursor_positioning_without_header(qapp, editor: QTextEdit, dialog: TableDialog):
+def test_insert_table_cursor_positioning_without_header(
+    qapp, editor: QTextEdit, dialog: TableDialog
+):
     """Test that cursor is positioned correctly after insertion without header."""
     dialog.rows_spin.setValue(2)
     dialog.cols_spin.setValue(2)

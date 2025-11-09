@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTextCursor
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -139,7 +138,7 @@ class TableDialog(QDialog):
 
         # Header row
         if include_header:
-            header_cells = [f"Column {i+1}" for i in range(cols)]
+            header_cells = [f"Column {i + 1}" for i in range(cols)]
             lines.append("| " + " | ".join(header_cells) + " |")
             # Separator row
             lines.append("| " + " | ".join([sep] * cols) + " |")
