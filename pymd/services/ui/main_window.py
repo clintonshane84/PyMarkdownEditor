@@ -23,6 +23,7 @@ from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
 from pymd.services.ui.create_link import CreateLinkDialog
 from pymd.services.ui.find_replace import FindReplaceDialog
+from pymd.services.ui.table_dialog import TableDialog
 from pymd.utils.constants import MAX_RECENTS
 
 
@@ -72,6 +73,7 @@ class MainWindow(QMainWindow):
         self.find_dialog = FindReplaceDialog(self.editor, self)
 
         self.link_dialog = CreateLinkDialog(self.editor, self)
+        self.table_dialog = TableDialog(self.editor, self)
 
         # Signals
         self.editor.textChanged.connect(self._on_text_changed)
@@ -164,6 +166,9 @@ class MainWindow(QMainWindow):
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
         self.act_img = QAction("Image", self, triggered=lambda: self._select_image())
         self.act_link = QAction("Link", self, triggered=lambda: self._create_link())
+        self.act_table = QAction(
+            "Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table
+        )
 
         # NEW: Find/Replace actions with standard shortcuts (portable)
         self.act_find = QAction("Find", self)
@@ -212,6 +217,7 @@ class MainWindow(QMainWindow):
             self.act_list,
             self.act_img,
             self.act_link,
+            self.act_table,
         ):
             tbf.addAction(a)
         tbf.addSeparator()
@@ -250,6 +256,7 @@ class MainWindow(QMainWindow):
             self.act_h1,
             self.act_h2,
             self.act_list,
+            self.act_table,
         ):
             editm.addAction(a)
         editm.addSeparator()
@@ -289,6 +296,10 @@ class MainWindow(QMainWindow):
 
     def _create_link(self) -> None:
         self.link_dialog.show_create_link()
+
+    def _insert_table(self) -> None:
+        """Show the table insertion dialog."""
+        self.table_dialog.show_table_dialog()
 
     def _surround(self, left: str, right: str) -> None:
         c = self.editor.textCursor()
