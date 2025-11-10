@@ -295,6 +295,7 @@ class MainWindow(QMainWindow):
         self.editor.setTextCursor(c)
 
     def _create_link(self) -> None:
+        """Show the link creation dialog"""
         self.link_dialog.show_create_link()
 
     def _insert_table(self) -> None:
