@@ -3,6 +3,9 @@
 A fast, minimal **PyQt6** Markdown editor with live preview, HTML/PDF export, and a clean, SOLID-friendly architecture.  
 Owner-led governance; contributions welcome (see [CONTRIBUTIONS](CONTRIBUTING.md)).
 
+[![CI](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/ci.yml)
+[![Build & Release Binaries](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/release-binaries.yml/badge.svg)](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/release-binaries.yml)
+
 ![PyMarkdownEditor](docs/screenshot.png)
 
 ---
