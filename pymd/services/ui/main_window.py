@@ -58,8 +58,9 @@ class MainWindow(QMainWindow):
         self.editor = QTextEdit(self)
         self.editor.setAcceptRichText(False)
         self.editor.setTabStopDistance(4 * self.editor.fontMetrics().horizontalAdvance(" "))
-        self.preview = QTextBrowser(self)
-        self.preview.setOpenExternalLinks(True)
+
+        # --- Preview: prefer QWebEngineView, fallback to QTextBrowser ---
+        self.preview = self._create_preview_widget()
 
         self.splitter = QSplitter(self)
         self.splitter.setOrientation(Qt.Orientation.Horizontal)
@@ -295,6 +296,7 @@ class MainWindow(QMainWindow):
         self.editor.setTextCursor(c)
 
     def _create_link(self) -> None:
+        """Show the link creation dialog"""
         self.link_dialog.show_create_link()
 
     def _insert_table(self) -> None:
@@ -361,7 +363,6 @@ class MainWindow(QMainWindow):
         try:
             # Ensure we start on a new line for the opening fence
             # If we're not already at start of a line, insert a newline.
-
             if c.position() > 0:
                 # Peek previous char; save pos, read, then restore pos before inserting
                 original_pos = c.position()
@@ -522,6 +523,7 @@ class MainWindow(QMainWindow):
     # ---------- Helpers ----------
     def _render_preview(self):
         html = self.renderer.to_html(self.editor.toPlainText())
+        # Both QWebEngineView and QTextBrowser implement setHtml(html).
         self.preview.setHtml(html)
 
     def _on_text_changed(self):
@@ -572,3 +574,21 @@ class MainWindow(QMainWindow):
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)
+
+    # ---------- Internal: preview creation ----------
+    def _create_preview_widget(self):
+        """
+        Prefer QWebEngineView (JS-capable: MathJax/KaTeX, better CSS), fall back to QTextBrowser.
+        We guard the import so the app runs even if Qt WebEngine isn't installed.
+        """
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+
+            print("QWebEngineView was initiated")
+            return QWebEngineView(self)
+        except Exception as e:
+            print(f"QWebEngineView failed to initiate with message: {e}")
+            w = QTextBrowser(self)
+            print("QTextBrowser was initiated as a fallback")
+            w.setOpenExternalLinks(True)
+            return w

@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QTextEdit,
     QVBoxLayout,
 )
 
@@ -25,28 +24,12 @@ class EditorPort(Protocol):
     def document(self): ...
 
 
-class QtTextEditorAdapter:
-    """Narrow adapter to satisfy EditorPort; isolates service from full QTextEdit API."""
-
-    def __init__(self, edit: QTextEdit):
-        self._e = edit
-
-    def textCursor(self) -> QTextCursor:
-        return self._e.textCursor()
-
-    def setTextCursor(self, c: QTextCursor) -> None:
-        self._e.setTextCursor(c)
-
-    def document(self):
-        return self._e.document()
-
-
 class CreateLinkDialog(QDialog):
-    def __init__(self, editor: QTextEdit, parent=None):
+    def __init__(self, editor: EditorPort, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create Link")
         self.setModal(False)
-        self._ed = QtTextEditorAdapter(editor)
+        self._ed = editor
 
         # Widgets
         self.url_edit = QLineEdit()
