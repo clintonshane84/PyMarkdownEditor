@@ -98,9 +98,7 @@ class IConfigService(Protocol):
 
     def get_int(self, section: str, key: str, default: int | None = None) -> int | None: ...
 
-    def get_bool(
-        self, section: str, key: str, default: bool | None = None
-    ) -> bool | None: ...
+    def get_bool(self, section: str, key: str, default: bool | None = None) -> bool | None: ...
 
     def as_dict(self) -> Mapping[str, Mapping[str, str]]:
         """A copy of the current config map (for diagnostics/About dialog)."""

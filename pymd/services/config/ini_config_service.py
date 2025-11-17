@@ -21,7 +21,8 @@ class IniConfigService(IConfigService):
 
     Load order (first hit wins):
       1. Explicit path provided at construction
-      2. User config dir (e.g., ~/.config/PyMarkdownEditor/config.ini or %APPDATA%\PyMarkdownEditor\config.ini)
+      2. User config dir (e.g., ~/.config/PyMarkdownEditor/config.ini
+            or %APPDATA%\PyMarkdownEditor\config.ini)
       3. Project default at <repo>/config/config.ini  (optional)
     """
 

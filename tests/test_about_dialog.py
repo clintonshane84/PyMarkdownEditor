@@ -42,7 +42,7 @@ def test_constructs_and_is_non_modal(dlg: AboutDialog):
 
 def test_has_expected_labels(dlg: AboutDialog):
     labels = dlg.findChildren(QLabel)
-    texts = [l.text() for l in labels]
+    texts = [label.text() for label in labels]
     assert any("PyMarkdown Editor" in t for t in texts)
     assert any("Version" in t for t in texts)
 

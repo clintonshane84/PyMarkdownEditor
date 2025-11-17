@@ -68,11 +68,11 @@ class MarkdownRenderer(IMarkdownRenderer):
 
     def _math_assets(self, engine: MathEngine) -> dict[str, str]:
         if engine == "katex":
-            # KaTeX (fast) – render client-side with auto-render
+            # KaTeX (fast) – render client-side with auto-render # noqa: RUF003
             # CDN versions can be pinned if you prefer.
             katex_css = (
-                '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" '
-                'integrity="sha384-wK3nQhH0cVZr7r8Y8sE0t4f2C7dYc8H3D8uQAu0QH3Tt/3jQ8b0EYYlq6QnZ6Z0v" crossorigin="anonymous">'
+                '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" '  # noqa: E501
+                'integrity="sha384-wK3nQhH0cVZr7r8Y8sE0t4f2C7dYc8H3D8uQAu0QH3Tt/3jQ8b0EYYlq6QnZ6Z0v" crossorigin="anonymous">'  # noqa: E501
             )
             katex_js = """
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"
