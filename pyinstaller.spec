@@ -16,6 +16,8 @@ hidden += [
     "PyQt6.QtGui",
     "PyQt6.QtWidgets",
     "PyQt6.QtPrintSupport",
+    "pymdownx",
+    "pymdownx.arithmatex",
 ]
 
 excludes = [

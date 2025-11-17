@@ -65,6 +65,8 @@ jobs:
                 --hidden-import PyQt6.QtGui \
                 --hidden-import PyQt6.QtWidgets \
                 --hidden-import PyQt6.QtPrintSupport \
+                --hidden-import pymdownx \
+                --hidden-import pymdownx.arithmatex \
                 pymd/__main__.py
               ;;
             macOS)
@@ -78,6 +80,8 @@ jobs:
                 --hidden-import PyQt6.QtGui \
                 --hidden-import PyQt6.QtWidgets \
                 --hidden-import PyQt6.QtPrintSupport \
+                --hidden-import pymdownx \
+                --hidden-import pymdownx.arithmatex \
                 pymd/__main__.py
               ;;
           esac
