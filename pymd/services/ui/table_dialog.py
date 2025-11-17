@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 # Ports / Model / Service
 # -------------------------
 
+
 class EditorPort(Protocol):
     def textCursor(self) -> QTextCursor: ...
     def setTextCursor(self, c: QTextCursor) -> None: ...

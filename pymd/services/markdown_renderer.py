@@ -1,12 +1,12 @@
 # pymd/services/markdown_renderer.py
 from __future__ import annotations
 
-import markdown
 from typing import Literal
+
+import markdown
 
 from pymd.domain.interfaces import IMarkdownRenderer
 from pymd.utils.constants import CSS_PREVIEW, HTML_TEMPLATE
-
 
 MathEngine = Literal["mathjax", "katex"]
 
@@ -40,8 +40,8 @@ class MarkdownRenderer(IMarkdownRenderer):
             # so the front-end renderer (MathJax/KaTeX) can process it.
             "pymdownx.arithmatex": {
                 "generic": True,
-                "inline_syntax": ["$", "$"],      # $...$
-                "block_syntax": ["$$", "$$"],     # $$...$$
+                "inline_syntax": ["$", "$"],  # $...$
+                "block_syntax": ["$$", "$$"],  # $$...$$
             },
         }
 
@@ -59,7 +59,9 @@ class MarkdownRenderer(IMarkdownRenderer):
         # NOTE:
         # - If your HTML_TEMPLATE already has <head> injection points, you can place the
         #   CSS there. To keep this module drop-in, we concatenate CSS and scripts here.
-        html = HTML_TEMPLATE.format(css=CSS_PREVIEW + math_assets["css"], body=body + math_assets["scripts"])
+        html = HTML_TEMPLATE.format(
+            css=CSS_PREVIEW + math_assets["css"], body=body + math_assets["scripts"]
+        )
         return html
 
     # -------------------- helpers --------------------

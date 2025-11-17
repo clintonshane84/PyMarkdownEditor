@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+
 # Keep this tiny and self-contained. No link-creation APIs here.
 class AboutDialog(QDialog):
     def __init__(self, _editor=None, parent=None):

@@ -583,6 +583,7 @@ class MainWindow(QMainWindow):
         """
         try:
             from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+
             print("QWebEngineView was initiated")
             return QWebEngineView(self)
         except Exception as e:

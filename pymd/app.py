@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-# add at the top or inside run_app() before QApplication is created
-from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtCore import Qt
 
+# add at the top or inside run_app() before QApplication is created
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QApplication
 
 from pymd.di.container import Container

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import configparser
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Optional, Mapping, Dict
 
 try:
     # Prefer modern community standard
@@ -28,9 +28,9 @@ class IniConfigService(IConfigService):
     DEFAULT_APP_DIR = "PyMarkdownEditor"
     DEFAULT_FILE = "config.ini"
 
-    def __init__(self, explicit_path: Optional[Path] = None, project_root: Optional[Path] = None):
+    def __init__(self, explicit_path: Path | None = None, project_root: Path | None = None):
         self._parser = configparser.ConfigParser()
-        self._loaded_from: Optional[Path] = None
+        self._loaded_from: Path | None = None
 
         # Resolve candidates
         candidates: list[Path] = []
@@ -69,12 +69,12 @@ class IniConfigService(IConfigService):
 
     # ----- IConfigService -----
 
-    def get(self, section: str, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, section: str, key: str, default: str | None = None) -> str | None:
         if section not in self._parser:
             return default
         return self._parser[section].get(key, default)
 
-    def get_int(self, section: str, key: str, default: Optional[int] = None) -> Optional[int]:
+    def get_int(self, section: str, key: str, default: int | None = None) -> int | None:
         val = self.get(section, key, None)
         if val is None:
             return default
@@ -83,7 +83,7 @@ class IniConfigService(IConfigService):
         except Exception:
             return default
 
-    def get_bool(self, section: str, key: str, default: Optional[bool] = None) -> Optional[bool]:
+    def get_bool(self, section: str, key: str, default: bool | None = None) -> bool | None:
         val = self.get(section, key, None)
         if val is None:
             return default
@@ -97,7 +97,7 @@ class IniConfigService(IConfigService):
         return default
 
     def as_dict(self) -> Mapping[str, Mapping[str, str]]:
-        snap: Dict[str, Dict[str, str]] = {}
+        snap: dict[str, dict[str, str]] = {}
         for sect in self._parser.sections():
             snap[sect] = dict(self._parser[sect])  # copy
         return snap
@@ -108,6 +108,6 @@ class IniConfigService(IConfigService):
     # ----- Extras -----
 
     @property
-    def loaded_from(self) -> Optional[Path]:
+    def loaded_from(self) -> Path | None:
         """For diagnostics/About dialog."""
         return self._loaded_from

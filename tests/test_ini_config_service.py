@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-import os
-import io
+
 import pytest
 
 from pymd.services.config.ini_config_service import IniConfigService
@@ -64,7 +63,9 @@ def test_platformdirs_preferred_over_project_root(monkeypatch, tmp_path):
     )
 
     # Create both files; platformdirs one should win
-    plat_path = Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    plat_path = (
+        Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    )
     proj_root = tmp_path / "repo"
     proj_path = proj_root / "config" / "config.ini"
 
@@ -87,7 +88,9 @@ def test_explicit_path_overrides_everything(monkeypatch, tmp_path):
         raising=False,
     )
 
-    plat_path = Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    plat_path = (
+        Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    )
     proj_root = tmp_path / "repo"
     proj_path = proj_root / "config" / "config.ini"
     explicit_path = tmp_path / "explicit.ini"
@@ -181,7 +184,9 @@ def test_malformed_config_is_ignored_and_defaults_used(monkeypatch, tmp_path):
         fake_user_config_dir,
         raising=False,
     )
-    bad_path = Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    bad_path = (
+        Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    )
     bad_path.parent.mkdir(parents=True, exist_ok=True)
     bad_path.write_text("this is not INI at all", encoding="utf-8")
 
@@ -200,7 +205,9 @@ def test_home_fallback_used_when_platformdirs_missing(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
 
     # Create ~/.config/PyMarkdownEditor/config.ini
-    fb_path = tmp_path / ".config" / IniConfigService.DEFAULT_APP_DIR / IniConfigService.DEFAULT_FILE
+    fb_path = (
+        tmp_path / ".config" / IniConfigService.DEFAULT_APP_DIR / IniConfigService.DEFAULT_FILE
+    )
     write_ini(fb_path, "[app]\nversion = 4.5.6\n")
 
     cfg = IniConfigService()

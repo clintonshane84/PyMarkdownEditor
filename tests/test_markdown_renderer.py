@@ -80,7 +80,9 @@ def test_katex_assets_and_wrapping_or_raw(renderer_katex: MarkdownRenderer):
     html = renderer_katex.to_html(md)
 
     # Accept arithmatex OR raw inline TeX (KaTeX auto-render can scan raw)
-    assert _has_arithmatex_wrappers(html) or "$a^2 + b^2 = c^2$" in html or "a^2 + b^2 = c^2" in html
+    assert (
+        _has_arithmatex_wrappers(html) or "$a^2 + b^2 = c^2$" in html or "a^2 + b^2 = c^2" in html
+    )
 
     # KaTeX assets
     assert "katex.min.css" in html

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Protocol, Optional, Mapping
+from typing import Protocol
 
 
 class IMarkdownRenderer(Protocol):
@@ -89,21 +89,21 @@ class IMessageService:
 
     def question_yes_no(self, title: str, text: str) -> bool: ...
 
+
 class IConfigService(Protocol):
     """Read-only application configuration (backed by INI/TOML/etc.)."""
 
-    def get(self, section: str, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, section: str, key: str, default: str | None = None) -> str | None:
         """Return a string value or default (no side-effects)."""
 
-    def get_int(self, section: str, key: str, default: Optional[int] = None) -> Optional[int]:
-        ...
+    def get_int(self, section: str, key: str, default: int | None = None) -> int | None: ...
 
-    def get_bool(self, section: str, key: str, default: Optional[bool] = None) -> Optional[bool]:
-        ...
+    def get_bool(
+        self, section: str, key: str, default: bool | None = None
+    ) -> bool | None: ...
 
     def as_dict(self) -> Mapping[str, Mapping[str, str]]:
         """A copy of the current config map (for diagnostics/About dialog)."""
 
     # Convenience for very common keys
-    def app_version(self) -> str:
-        ...
+    def app_version(self) -> str: ...
