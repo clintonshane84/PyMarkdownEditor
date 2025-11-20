@@ -9,10 +9,10 @@ except Exception as e:
     ) from e
 
 from pathlib import Path
-from typing import Optional
 
 from PyQt6.QtCore import QEventLoop, QMarginsF, QTimer
 from PyQt6.QtGui import QPageLayout, QPageSize
+
 from pymd.domain.interfaces import IExporter
 
 
@@ -21,6 +21,7 @@ class WebEnginePdfExporter(IExporter):
     Render HTML to PDF via Qt WebEngine for output that matches the preview.
     Falls back by raising a clear error if QtWebEngine is unavailable.
     """
+
     name = "web-pdf"
     label = "Export PDF (Web)…"
     file_ext = "pdf"
@@ -40,7 +41,7 @@ class WebEnginePdfExporter(IExporter):
     def export(self, html: str, out_path: Path) -> None:
         page = QWebEngineView()
         loop = QEventLoop()
-        errored: list[Optional[Exception]] = [None]
+        errored: list[Exception | None] = [None]
 
         # Safety timeout
         def on_timeout():
@@ -60,7 +61,9 @@ class WebEnginePdfExporter(IExporter):
                 loop.quit()
                 return
 
-            layout = QPageLayout(self._page_size, self._orientation, self._margins, QPageLayout.Unit.Millimeter)
+            layout = QPageLayout(
+                self._page_size, self._orientation, self._margins, QPageLayout.Unit.Millimeter
+            )
 
             def on_pdf_ready(data: bytes):
                 try:
