@@ -8,6 +8,7 @@ from pymd.domain.interfaces import IExporter
 class HtmlExporter(IExporter):
     name = "html"
     label = "Export HTML…"
+    file_ext = "html"
 
     def export(self, html: str, out_path: Path) -> None:
         out_path.write_text(html, encoding="utf-8")

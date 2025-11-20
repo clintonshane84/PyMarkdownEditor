@@ -496,11 +496,11 @@ class MainWindow(QMainWindow):
     def _export_with(self, exporter):
         # choose output file
         default = (
-            self.doc.path.with_suffix(f".{exporter.name}").name
+            self.doc.path.with_suffix(f".{exporter.file_ext}").name
             if self.doc.path
             else f"document.{exporter.name}"
         )
-        filt = f"{exporter.name.upper()} (*.{exporter.name})"
+        filt = f"{exporter.name.upper()} (*.{exporter.file_ext})"
         out_str, _ = QFileDialog.getSaveFileName(self, exporter.label, default, filt)
         if not out_str:
             return

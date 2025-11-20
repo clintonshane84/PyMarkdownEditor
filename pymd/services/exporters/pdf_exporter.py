@@ -12,6 +12,7 @@ from pymd.domain.interfaces import IExporter
 class PdfExporter(IExporter):
     name = "pdf"
     label = "Export PDF…"
+    file_ext = "pdf"
 
     def export(self, html: str, out_path: Path) -> None:
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)

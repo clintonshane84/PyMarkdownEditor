@@ -8,6 +8,7 @@ from pymd.domain.interfaces import (
     IMarkdownRenderer,
     ISettingsService,
 )
+from pymd.services.exporters import WebEnginePdfExporter
 
 # Exporter registry: **singleton instance** (do NOT call it)
 from pymd.services.exporters.base import ExporterRegistryInst
@@ -108,6 +109,12 @@ class Container:
             exporter_registry.get("pdf")
         except KeyError:
             exporter_registry.register(PdfExporter())
+
+        # web-pdf
+        try:
+            exporter_registry.get("web-pdf")
+        except KeyError:
+            exporter_registry.register(WebEnginePdfExporter())
 
     # ---------- UI factories ----------
 
