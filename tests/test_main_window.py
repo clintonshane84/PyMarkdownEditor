@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from PyQt6.QtCore import QSettings
-from PyQt6.QtWidgets import QMessageBox, QTextEdit
+from PyQt6.QtWidgets import QMessageBox, QTextBrowser, QTextEdit
 
 from pymd.domain.interfaces import IExporter, IExporterRegistry
 from pymd.services.file_service import FileService
@@ -12,6 +12,17 @@ from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
 from pymd.services.ui.main_window import MainWindow
 from pymd.utils.constants import MAX_RECENTS
+
+
+# Force the preview widget to be QTextBrowser in tests (avoids WebEngine crashes/headless issues)
+@pytest.fixture(autouse=True)
+def force_textbrowser_preview(monkeypatch):
+    def _factory(self):
+        w = QTextBrowser(self)
+        w.setOpenExternalLinks(True)
+        return w
+
+    monkeypatch.setattr(MainWindow, "_create_preview_widget", _factory, raising=True)
 
 
 # ------------------------------
@@ -34,6 +45,8 @@ def auto_accept_discard(monkeypatch):
 # ------------------------------
 class DummyExporter(IExporter):
     """Tiny exporter used for tests; writes the HTML to a .txt file."""
+
+    file_ext = "txt"
 
     @property
     def name(self) -> str:
