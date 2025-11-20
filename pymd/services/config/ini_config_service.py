@@ -43,8 +43,13 @@ class IniConfigService(IConfigService):
             cfg_dir = Path(user_config_dir(self.DEFAULT_APP_DIR))
             candidates.append(cfg_dir / self.DEFAULT_FILE)
         else:
-            # very light fallback
-            home = Path(os.path.expanduser("~"))
+            # Cross-platform fallback to a "home" dir:
+            # Prefer $HOME (works in CI & tests), then USERPROFILE (Windows), then Path.home().
+            home_env = os.environ.get("HOME")
+            if home_env:
+                home = Path(home_env)
+            else:
+                home = Path(os.environ.get("USERPROFILE", str(Path.home())))
             candidates.append(home / ".config" / self.DEFAULT_APP_DIR / self.DEFAULT_FILE)
 
         # Repo default (optional, handy for dev)
