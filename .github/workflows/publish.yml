@@ -41,11 +41,7 @@ jobs:
           echo "VER_IN_TAG=${VER_IN_TAG}"
 
           # read project.version from pyproject.toml via tomli (strict PEP 621)
-          VER_IN_FILE=$(python - <<'PY'
-import tomli, pathlib
-print(tomli.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])
-PY
-)
+          VER_IN_FILE=$(python -c 'import tomli, pathlib; print(tomli.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')
           echo "VER_IN_FILE=${VER_IN_FILE}"
 
           if [ "${VER_IN_TAG}" != "${VER_IN_FILE}" ]; then
