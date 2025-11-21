@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
+## [v0.8.6](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.6) - 2025-11-21
+
+<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.5...HEAD)</small>
+
+<!-- insertion marker -->
+## [v0.8.5](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.5) - 2025-11-21
+
+<small>[Compare with v0.8.4](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.4...v0.8.5)</small>
+
 ## [v0.8.4](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.4) - 2025-11-21
 
 <small>[Compare with v0.8.3](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.3...v0.8.4)</small>
