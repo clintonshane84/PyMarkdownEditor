@@ -5,13 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.7.1...HEAD)</small>
+<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.0...HEAD)</small>
+
+<!-- insertion marker -->
+## [v0.8.0](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.0) - 2025-11-20
+
+<small>[Compare with v0.7.1](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.7.1...v0.8.0)</small>
 
 ### Added
 
+- Added pyproject.toml in preparation for publishing the project to pypi.org ([7a7147e](https://github.com/clintonshane84/PyMarkdownEditor/commit/7a7147e0ee9c57d3c02bdaa414330ba040aa9acd) by Clinton).
+- Added latest updates to CHANGELOG.md ([8f28a09](https://github.com/clintonshane84/PyMarkdownEditor/commit/8f28a09d2b8040796b98103f5f4304668ec533ba) by Clinton).
+- Added pyproject.toml and workflow in preparation to start publishing to PyPi.org ([ef055b8](https://github.com/clintonshane84/PyMarkdownEditor/commit/ef055b8fe5b84d5572bd74dc917e43a77f90e043) by Clinton).
 - Added new web_pdf_exporter.py to include a QWebEngine rendered version of the PDF file, while keeping the existing QTextBrowser version ([c3f3843](https://github.com/clintonshane84/PyMarkdownEditor/commit/c3f384320aed7c2753c619ddc4ce8ccdb22224c0) by Clinton).
 
-<!-- insertion marker -->
 ## [v0.7.1](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.7.1) - 2025-11-17
 
 <small>[Compare with v0.7.0](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.7.0...v0.7.1)</small>
