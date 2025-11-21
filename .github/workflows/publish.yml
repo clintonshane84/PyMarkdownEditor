@@ -1,0 +1,113 @@
+name: Publish to (Test)PyPI
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # e.g. v0.8.0, v0.8.1a1, v0.8.1-foo
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist+wheel
+    runs-on: ubuntu-latest
+    outputs:
+      pre: ${{ steps.verify.outputs.pre }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install -U pip
+          python -m pip install build twine tomli
+
+      - name: Verify tag matches project.version
+        id: verify
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"             # e.g. v0.8.0
+          VER_IN_TAG="${TAG#v}"                # drop leading v
+          echo "TAG=${TAG}"
+          echo "VER_IN_TAG=${VER_IN_TAG}"
+
+          # read project.version from pyproject.toml via tomli (strict PEP 621)
+          VER_IN_FILE=$(python - <<'PY'
+import tomli, pathlib
+print(tomli.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])
+PY
+)
+          echo "VER_IN_FILE=${VER_IN_FILE}"
+
+          if [ "${VER_IN_TAG}" != "${VER_IN_FILE}" ]; then
+            echo "Error: Tag ${VER_IN_TAG} does not match pyproject version ${VER_IN_FILE}"
+            exit 1
+          fi
+
+          # Flag prereleases (aN/bN/rcN) or any hyphenated tag as pre/preview
+          if echo "${VER_IN_TAG}" | grep -Eq '(^|[0-9])(a|b|rc)[0-9]+|-'; then
+            echo "pre=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pre=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Check metadata (twine)
+        run: python -m twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dists
+          path: dist/*
+
+  publish-testpypi:
+    name: Publish to TestPyPI (pre-releases)
+    needs: build
+    runs-on: ubuntu-latest
+    if: needs.build.outputs.pre == 'true'
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/py-markdown-editor
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dists
+          path: dist
+      - name: Publish (Trusted Publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI (final releases)
+    needs: build
+    runs-on: ubuntu-latest
+    if: needs.build.outputs.pre == 'false'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/py-markdown-editor
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dists
+          path: dist
+      - name: Publish (Trusted Publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
