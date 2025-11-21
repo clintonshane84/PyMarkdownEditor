@@ -6,11 +6,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
-## Unreleased
+## [v0.8.4](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.4) - 2025-11-21
 
-<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.2...HEAD)</small>
+<small>[Compare with v0.8.3](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.3...v0.8.4)</small>
 
-<!-- insertion marker -->
+### Added
+
+- Added setuptools config and updated version in pyproject.toml ([ca1c120](https://github.com/clintonshane84/PyMarkdownEditor/commit/ca1c120789a57fd4d7edfceed8661d7b62b7b92c) by Clinton).
+
+## [v0.8.3](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.3) - 2025-11-21
+
+<small>[Compare with v0.8.2](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.2...v0.8.3)</small>
+
 ## [v0.8.2](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.2) - 2025-11-21
 
 <small>[Compare with v0.8.1](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.1...v0.8.2)</small>
