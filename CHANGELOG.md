@@ -6,11 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
-## [v0.8.6](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.6) - 2025-11-21
+## Unreleased
 
-<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.5...HEAD)</small>
+<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.6...HEAD)</small>
 
 <!-- insertion marker -->
+## [v0.8.6](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.6) - 2025-11-21
+
+<small>[Compare with v0.8.5](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.5...v0.8.6)</small>
+
 ## [v0.8.5](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.5) - 2025-11-21
 
 <small>[Compare with v0.8.4](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.4...v0.8.5)</small>
@@ -195,3 +199,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Added missing screenshot for README and updated dev-requirements.txt file with latest libraries used in project development ([5dd8e15](https://github.com/clintonshane84/PyMarkdownEditor/commit/5dd8e15fb4179eaf3ac6ca93b8423cc32891fa61) by Clinton).
 - Added a README.md file for the project ([656056f](https://github.com/clintonshane84/PyMarkdownEditor/commit/656056fe72e6f4642dfbf3af6af9bc41f836753f) by Clinton).
+
