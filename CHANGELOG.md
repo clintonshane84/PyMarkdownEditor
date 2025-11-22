@@ -8,9 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 <!-- insertion marker -->
 ## Unreleased
 
-<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.6...HEAD)</small>
+<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.7...HEAD)</small>
+
+### Added
+
+- Added backport module import to pyinstaller build ([36b790f](https://github.com/clintonshane84/PyMarkdownEditor/commit/36b790fcaa66c98de49bbe958ebccbc34ac97daf) by Clinton).
 
 <!-- insertion marker -->
+## [v0.8.7](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.7) - 2025-11-22
+
+<small>[Compare with v0.8.6](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.6...v0.8.7)</small>
+
 ## [v0.8.6](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.6) - 2025-11-21
 
 <small>[Compare with v0.8.5](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.5...v0.8.6)</small>
