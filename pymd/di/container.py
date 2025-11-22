@@ -13,7 +13,6 @@ from pymd.services.exporters import WebEnginePdfExporter
 # Exporter registry: **singleton instance** (do NOT call it)
 from pymd.services.exporters.base import ExporterRegistryInst
 from pymd.services.exporters.html_exporter import HtmlExporter
-from pymd.services.exporters.pdf_exporter import PdfExporter
 from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
@@ -107,12 +106,6 @@ class Container:
         # pdf
         try:
             exporter_registry.get("pdf")
-        except KeyError:
-            exporter_registry.register(PdfExporter())
-
-        # web-pdf
-        try:
-            exporter_registry.get("web-pdf")
         except KeyError:
             exporter_registry.register(WebEnginePdfExporter())
 

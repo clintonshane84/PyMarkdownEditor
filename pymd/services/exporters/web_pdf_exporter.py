@@ -22,8 +22,8 @@ class WebEnginePdfExporter(IExporter):
     Falls back by raising a clear error if QtWebEngine is unavailable.
     """
 
-    name = "web-pdf"
-    label = "Export PDF (Web)…"
+    name = "pdf"
+    label = "Export PDF…"
     file_ext = "pdf"
 
     def __init__(
