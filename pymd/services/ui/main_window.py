@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import math
+import platform
+import re
+import shutil
+import struct
+import subprocess
+import tempfile
+import wave
 from pathlib import Path
 
 from PyQt6.QtCore import QByteArray, QSettings, Qt
@@ -23,6 +31,7 @@ from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
 from pymd.services.focus import (
     FocusSessionService,
+    FocusStatus,
     SessionWriter,
     StartSessionRequest,
     TimerSettings,
@@ -33,6 +42,13 @@ from pymd.services.ui.floating_timer_window import FloatingTimerWindow
 from pymd.services.ui.focus_dialogs import StartSessionDialog, TimerSettingsDialog
 from pymd.services.ui.table_dialog import TableDialog
 from pymd.utils.constants import MAX_RECENTS
+
+SUMMARY_LABEL_WORK_ITEM = "Work item"
+SUMMARY_LABEL_WHEN = "When"
+SUMMARY_LABEL_STATUS = "Status"
+SUMMARY_LABEL_TIME = "Time"
+SUMMARY_LABEL_INTERRUPTION = "Interruptions"
+SUMMARY_LABEL_SESSION = "Session"
 
 
 class MainWindow(QMainWindow):
@@ -61,11 +77,15 @@ class MainWindow(QMainWindow):
             writer=self.session_writer,
             timer_settings=self.timer_settings,
             save_active_note=self._save_active_session_note,
-            on_finish_sound=lambda: QApplication.beep(),
+            on_finish_sound=self._play_finish_sound,
             parent=self,
         )
         self.timer_window = FloatingTimerWindow(self)
         self.timer_window.hide()
+        self._alarm_sound_effects: dict[str, object] = {}
+        self._alarm_sound_path: Path | None = None
+        self._alarm_media_player = None
+        self._alarm_audio_output = None
         self.timer_window.pause_resume_clicked.connect(self._toggle_focus_pause_resume)
         self.timer_window.stop_clicked.connect(self._stop_focus_session)
         self.focus_service.tick.connect(self._on_focus_tick)
@@ -490,7 +510,8 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         self.doc = Document(path=None, text="", modified=False)
-        self.editor.setPlainText("")
+        self._set_editor_text_safely("")
+        self.doc.modified = False
         self._update_title()
         self._render_preview()
 
@@ -519,7 +540,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Open Error", f"Failed to open file:\n{e}")
             return False
         self.doc = Document(path=path, text=text, modified=False)
-        self.editor.setPlainText(text)
+        self._set_editor_text_safely(text)
+        self.doc.modified = False
         self._update_title()
         self._render_preview()
         self._add_recent(path)
@@ -602,6 +624,13 @@ class MainWindow(QMainWindow):
         star = " •" if self.doc.modified else ""
         self.setWindowTitle(f"{name}{star} — Markdown Editor")
 
+    def _set_editor_text_safely(self, text: str) -> None:
+        was_blocked = self.editor.blockSignals(True)
+        try:
+            self.editor.setPlainText(text)
+        finally:
+            self.editor.blockSignals(was_blocked)
+
     def _confirm_discard(self) -> bool:
         if not self.doc.modified:
             return True
@@ -627,7 +656,11 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
 
-        dlg = StartSessionDialog(timer_settings=self.timer_settings, parent=self)
+        dlg = StartSessionDialog(
+            timer_settings=self.timer_settings,
+            current_note_path=self.doc.path,
+            parent=self,
+        )
         result = dlg.get_result()
         if result is None:
             return
@@ -638,16 +671,29 @@ class MainWindow(QMainWindow):
         if self.focus_service.is_active:
             self._stop_focus_session()
 
+        existing_note_path: Path | None = None
+        if result.use_current_note:
+            if self.doc.path is None:
+                QMessageBox.information(
+                    self,
+                    "Save Required",
+                    "Save this note first, then start a timer on it.",
+                )
+                return
+            existing_note_path = self.doc.path
+
         req = StartSessionRequest(
             title=result.title,
             tag=result.tag,
             folder=result.folder,
             focus_minutes=result.focus_minutes,
             break_minutes=result.break_minutes,
+            existing_note_path=existing_note_path,
         )
         try:
             state = self.focus_service.start_session(req)
-            self._open_path(state.note_path, confirm_discard=False)
+            if self.doc.path != state.note_path:
+                self._open_path(state.note_path, confirm_discard=False)
             self.timer_settings.set_default_folder(result.folder)
         except Exception as e:
             QMessageBox.critical(self, "Timer Error", f"Failed to start session:\n{e}")
@@ -690,16 +736,15 @@ class MainWindow(QMainWindow):
         self.act_stop_focus.setEnabled(is_active)
         self.timer_window.set_paused(is_paused)
         self._set_session_lock_ui(is_active)
+        state = self.focus_service.state
+        if state is not None and (is_active or state.stopped):
+            self._upsert_session_runtime_stats(state)
 
     def _on_focus_tick(self, remaining_seconds: int, total_seconds: int) -> None:
         self.timer_window.set_countdown(remaining_seconds)
-        amber_threshold = max(60, int(total_seconds * 0.20))
-        if remaining_seconds <= 90:
-            self.timer_window.set_color_state("red")
-        elif remaining_seconds <= amber_threshold:
-            self.timer_window.set_color_state("amber")
-        else:
-            self.timer_window.set_color_state("green")
+        self.timer_window.set_color_state(
+            self._color_level_for_remaining(remaining_seconds, total_seconds)
+        )
 
     def _save_active_session_note(self) -> bool:
         state = self.focus_service.state
@@ -791,6 +836,288 @@ class MainWindow(QMainWindow):
         self._safe_autosave()
         self.focus_service.stop()
         self._persist_timer_window_pos()
+
+    def _upsert_session_runtime_stats(self, state) -> None:
+        work_item = self._infer_work_item(state)
+        session_date = state.start_at.date().isoformat()
+        block = self._build_session_footer_block(
+            state, work_item=work_item, session_date=session_date
+        )
+        text = self._strip_legacy_focus_blocks(self.editor.toPlainText().rstrip())
+        next_text = self._replace_or_append_summary_block(
+            text=text,
+            replacement_block=block,
+            session_date=session_date,
+            work_item=work_item,
+        )
+        self.editor.setPlainText(next_text + "\n")
+        if self.doc.path is not None:
+            self._write_to(self.doc.path, silent=True)
+
+    def _build_session_footer_block(self, state, *, work_item: str, session_date: str) -> str:
+        expected_seconds = state.expected_focus_seconds
+        actual_seconds = state.actual_focus_seconds
+        interrupt_seconds = state.break_total_seconds()
+        expected = self._format_seconds(expected_seconds)
+        actual = self._format_seconds(actual_seconds)
+        break_total = self._format_seconds(interrupt_seconds)
+        start_iso = state.start_at.isoformat(timespec="seconds")
+        end_label = "in progress"
+        if state.stopped and state.stopped_at is not None:
+            end_label = state.stopped_at.isoformat(timespec="seconds")
+        status_label = self._status_text(state)
+        status_key = state.status().value
+        lines = [
+            "---",
+            "",
+            f"### Focus Session ({session_date})",
+            "",
+            f"**{SUMMARY_LABEL_WORK_ITEM}:** {work_item}  ",
+            f"**{SUMMARY_LABEL_WHEN}:** start `{start_iso}` | end `{end_label}`  ",
+            f"**{SUMMARY_LABEL_STATUS}:** {status_label}  ",
+            f"**{SUMMARY_LABEL_TIME}:** actual **{actual}** vs expected **{expected}**  ",
+            (
+                f"**{SUMMARY_LABEL_INTERRUPTION}:** **{state.interruptions}** "
+                f"(total **{break_total}**)  "
+            ),
+            (
+                f"**{SUMMARY_LABEL_SESSION}:** preset `{state.preset_label}` "
+                f"| id `{state.session_id}`"
+            ),
+            "<!-- focus-meta:",
+            f"status={status_key}",
+            f"actual_seconds={actual_seconds}",
+            f"expected_seconds={expected_seconds}",
+            f"interruptions={state.interruptions}",
+            f"interrupt_seconds={interrupt_seconds}",
+            "-->",
+            "",
+        ]
+        return "\n".join(lines)
+
+    def _format_seconds(self, seconds: int) -> str:
+        minutes, sec = divmod(max(0, int(seconds)), 60)
+        return f"{minutes}m {sec}s"
+
+    def _strip_legacy_focus_blocks(self, text: str) -> str:
+        old_stats_pattern = re.compile(
+            r"\n*<!-- focus-session-stats:start -->.*?<!-- focus-session-stats:end -->\n*",
+            re.DOTALL,
+        )
+        cleaned = old_stats_pattern.sub("\n", text).rstrip()
+        old_yaml_pattern = re.compile(
+            r"\n*---\n"
+            r"id:\s+\d{8}T\d{12}\n"
+            r"start:\s+.+\n"
+            r"preset:\s+.+\n"
+            r"tag:\s+.*\n"
+            r"interruptions:\s+\d+\n"
+            r"---\n*$",
+            re.DOTALL,
+        )
+        cleaned = old_yaml_pattern.sub("\n", cleaned).rstrip()
+        old_callout_pattern = re.compile(
+            r"\n*<!-- focus-session-footer:start -->.*?<!-- focus-session-footer:end -->\n*",
+            re.DOTALL,
+        )
+        cleaned = old_callout_pattern.sub("\n", cleaned).rstrip()
+        return cleaned
+
+    def _infer_work_item(self, state) -> str:
+        title = state.title.strip()
+        tag = state.tag.strip()
+        if title and tag:
+            return f"{title} ({tag})"
+        if title:
+            return title
+        if tag:
+            return tag
+        heading = self._first_markdown_heading(self.editor.toPlainText())
+        return heading or "Untitled focus work"
+
+    def _first_markdown_heading(self, text: str) -> str | None:
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if line.startswith("#"):
+                return line.lstrip("#").strip() or None
+        return None
+
+    def _status_text(self, state) -> str:
+        status = state.status()
+        if status == FocusStatus.PAUSED:
+            return "🟠 ON BREAK"
+        if status == FocusStatus.COMPLETED:
+            return "🔴 COMPLETED"
+        return "🟢 ACTIVE"
+
+    def _session_block_pattern(self, session_id: str):
+        return re.compile(
+            r"\n*---\n\n### Focus Session \([^)]+\)\n\n"
+            r".*?\n\*\*Session:\*\* preset `[^`]+` \| id `"
+            + re.escape(session_id)
+            + r"`\n\n-\n*",
+            re.DOTALL,
+        )
+
+    def _replace_or_append_summary_block(
+        self, *, text: str, replacement_block: str, session_date: str, work_item: str
+    ) -> str:
+        blocks = list(self._extract_summary_blocks(text))
+        key = (session_date, work_item)
+        if not blocks:
+            return f"{text}\n\n{replacement_block}".strip()
+
+        out_parts: list[str] = []
+        cursor = 0
+        replaced_once = False
+        for start, end, date_value, work_value in blocks:
+            out_parts.append(text[cursor:start])
+            block_key = (date_value, work_value)
+            if block_key == key:
+                if not replaced_once:
+                    out_parts.append(replacement_block)
+                    replaced_once = True
+                # Drop duplicate same-key blocks.
+            else:
+                out_parts.append(text[start:end])
+            cursor = end
+        out_parts.append(text[cursor:])
+        merged = "".join(out_parts).strip()
+        if replaced_once:
+            return merged
+        return f"{merged}\n\n{replacement_block}".strip()
+
+    def _extract_summary_blocks(self, text: str):
+        pattern = re.compile(
+            r"---\n\n### Focus Session \((?P<date>[^)]+)\)\n\n"
+            r"\*\*Work item:\*\* (?P<work>[^\n]+?)  \n"
+            r".*?(?=\n---\n\n### Focus Session \(|\Z)",
+            re.DOTALL,
+        )
+        for m in pattern.finditer(text):
+            yield (m.start(), m.end(), m.group("date").strip(), m.group("work").strip())
+
+    def _color_level_for_remaining(self, remaining_seconds: int, total_seconds: int) -> str:
+        if total_seconds <= 0:
+            return "green"
+        if total_seconds <= 300:
+            red_threshold = max(12, int(total_seconds * 0.12))
+            amber_threshold = max(red_threshold + 1, int(total_seconds * 0.28))
+        else:
+            red_threshold = min(90, max(60, int(total_seconds * 0.10)))
+            amber_threshold = max(red_threshold + 1, int(total_seconds * 0.20))
+        if remaining_seconds <= red_threshold:
+            return "red"
+        if remaining_seconds <= amber_threshold:
+            return "amber"
+        return "green"
+
+    def _play_finish_sound(self) -> None:
+        profile = self.timer_settings.get_sound_profile()
+        if profile == "beep":
+            QApplication.beep()
+            return
+        alarm_path = self._resolve_alarm_sound_path(profile)
+        if alarm_path and self._play_qsoundeffect_alarm(alarm_path):
+            return
+        QApplication.beep()
+
+    def _play_qsoundeffect_alarm(self, sound_path: Path) -> bool:
+        if sound_path.suffix.lower() != ".wav":
+            return self._play_media_alarm(sound_path)
+        try:
+            from PyQt6.QtCore import QUrl
+            from PyQt6.QtMultimedia import QSoundEffect  # type: ignore
+        except Exception:
+            return self._play_media_alarm(sound_path)
+        try:
+            key = str(sound_path)
+            effect = self._alarm_sound_effects.get(key)
+            if effect is None:
+                effect = QSoundEffect(self)
+                effect.setSource(QUrl.fromLocalFile(str(sound_path)))
+                effect.setVolume(0.90)
+                self._alarm_sound_effects[key] = effect
+            effect.play()
+            return True
+        except Exception:
+            return self._play_media_alarm(sound_path)
+
+    def _play_media_alarm(self, sound_path: Path) -> bool:
+        try:
+            from PyQt6.QtCore import QUrl
+            from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer  # type: ignore
+        except Exception:
+            return self._play_system_alarm(sound_path)
+        try:
+            if self._alarm_media_player is None or self._alarm_audio_output is None:
+                audio = QAudioOutput(self)
+                audio.setVolume(0.95)
+                player = QMediaPlayer(self)
+                player.setAudioOutput(audio)
+                self._alarm_audio_output = audio
+                self._alarm_media_player = player
+            self._alarm_media_player.setSource(QUrl.fromLocalFile(str(sound_path)))
+            self._alarm_media_player.play()
+            return True
+        except Exception:
+            return self._play_system_alarm(sound_path)
+
+    def _play_system_alarm(self, sound_path: Path) -> bool:
+        if platform.system() == "Darwin":
+            afplay = shutil.which("afplay")
+            if afplay:
+                try:
+                    subprocess.Popen(
+                        [afplay, str(sound_path)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return True
+                except Exception:
+                    return False
+        return False
+
+    def _resolve_alarm_sound_path(self, profile: str) -> Path | None:
+        if profile == "custom":
+            custom = self.timer_settings.get_custom_sound_path()
+            if custom is None or not custom.exists():
+                return None
+            return custom
+        return self._ensure_alarm_sound_file(profile)
+
+    def _ensure_alarm_sound_file(self, profile: str) -> Path:
+        out = Path(tempfile.gettempdir()) / f"pymd_focus_alarm_{profile}.wav"
+        if out.exists():
+            return out
+        sample_rate = 44_100
+        amplitude = 16000
+        tones = self._tone_pattern(profile)
+        with wave.open(str(out), "w") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            for freq, dur in tones:
+                if freq <= 0:
+                    silence_frames = int(sample_rate * dur)
+                    wav_file.writeframesraw(b"\x00\x00" * silence_frames)
+                    continue
+                frames = int(sample_rate * dur)
+                for i in range(frames):
+                    angle = 2.0 * math.pi * freq * (i / sample_rate)
+                    sample = int(amplitude * math.sin(angle))
+                    wav_file.writeframesraw(struct.pack("<h", sample))
+        self._alarm_sound_path = out
+        return out
+
+    def _tone_pattern(self, profile: str) -> list[tuple[float, float]]:
+        if profile == "chime":
+            return [(659.0, 0.15), (0.0, 0.05), (880.0, 0.20)]
+        if profile == "bell":
+            return [(523.0, 0.25), (392.0, 0.20)]
+        if profile == "ping":
+            return [(1046.0, 0.12)]
+        return [(880.0, 0.20)]
 
     # ---------- Internal: preview creation ----------
     def _create_preview_widget(self):

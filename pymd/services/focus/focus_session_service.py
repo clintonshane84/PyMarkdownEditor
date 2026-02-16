@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
+from secrets import token_hex
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from pymd.services.focus.session_writer import SessionWriter
 from pymd.services.focus.timer_settings import TimerSettings
+
+
+class FocusStatus(Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
 
 
 @dataclass(frozen=True)
@@ -18,6 +26,7 @@ class StartSessionRequest:
     folder: Path
     focus_minutes: int
     break_minutes: int
+    existing_note_path: Path | None = None
 
 
 @dataclass
@@ -32,11 +41,32 @@ class FocusSessionState:
     interruptions: int = 0
     paused: bool = False
     stopped: bool = False
+    stopped_at: datetime | None = None
     remaining_seconds: int = 0
+    pause_started_at: datetime | None = None
+    break_spans_seconds: list[int] = field(default_factory=list)
 
     @property
     def preset_label(self) -> str:
         return f"{self.focus_minutes}/{self.break_minutes}"
+
+    @property
+    def expected_focus_seconds(self) -> int:
+        return max(0, self.focus_minutes * 60)
+
+    @property
+    def actual_focus_seconds(self) -> int:
+        return max(0, self.expected_focus_seconds - self.remaining_seconds)
+
+    def break_total_seconds(self) -> int:
+        return sum(self.break_spans_seconds)
+
+    def status(self) -> FocusStatus:
+        if self.paused:
+            return FocusStatus.PAUSED
+        if self.stopped:
+            return FocusStatus.COMPLETED
+        return FocusStatus.ACTIVE
 
 
 class FocusSessionService(QObject):
@@ -89,16 +119,19 @@ class FocusSessionService(QObject):
 
         start_at = datetime.now().astimezone()
         session_id = self._build_session_id(start_at)
-        note_path = self._writer.create_note(
-            folder=req.folder,
-            session_id=session_id,
-            start_at=start_at,
-            focus_minutes=req.focus_minutes,
-            break_minutes=req.break_minutes,
-            title=req.title,
-            tag=req.tag,
-            interruptions=0,
-        )
+        if req.existing_note_path is not None:
+            note_path = req.existing_note_path
+        else:
+            note_path = self._writer.create_note(
+                folder=req.folder,
+                session_id=session_id,
+                start_at=start_at,
+                focus_minutes=req.focus_minutes,
+                break_minutes=req.break_minutes,
+                title=req.title,
+                tag=req.tag,
+                interruptions=0,
+            )
         self._state = FocusSessionState(
             session_id=session_id,
             title=req.title.strip(),
@@ -121,7 +154,9 @@ class FocusSessionService(QObject):
     def pause(self) -> bool:
         if not self._state or self._state.stopped or self._state.paused:
             return False
+        now = datetime.now().astimezone()
         self._state.paused = True
+        self._state.pause_started_at = now
         self._state.interruptions += 1
         self._countdown.stop()
         self._autosave.stop()
@@ -132,6 +167,11 @@ class FocusSessionService(QObject):
     def resume(self) -> bool:
         if not self._state or self._state.stopped or not self._state.paused:
             return False
+        now = datetime.now().astimezone()
+        if self._state.pause_started_at is not None:
+            span = max(0, int((now - self._state.pause_started_at).total_seconds()))
+            self._state.break_spans_seconds.append(span)
+            self._state.pause_started_at = None
         self._state.paused = False
         self._start_timers()
         self.state_changed.emit(True, False)
@@ -147,6 +187,11 @@ class FocusSessionService(QObject):
         now = datetime.now().astimezone()
         state = self._state
         state.stopped = True
+        state.stopped_at = now
+        if state.pause_started_at is not None:
+            span = max(0, int((now - state.pause_started_at).total_seconds()))
+            state.break_spans_seconds.append(span)
+            state.pause_started_at = None
 
         configured_focus_minutes = state.focus_minutes
         entry: dict[str, object] = {
@@ -159,6 +204,9 @@ class FocusSessionService(QObject):
             "title": state.title or "Focus Session",
             "note_path": str(state.note_path),
             "interruptions": state.interruptions,
+            "actual_focus_min": round(state.actual_focus_seconds / 60, 2),
+            "expected_focus_min": round(state.expected_focus_seconds / 60, 2),
+            "break_total_sec": state.break_total_seconds(),
         }
         try:
             self._writer.append_log(log_entry=entry, at_time=now)
@@ -198,4 +246,4 @@ class FocusSessionService(QObject):
             self.stop()
 
     def _build_session_id(self, when: datetime) -> str:
-        return when.strftime("%Y%m%dT%H%M%S%f")
+        return f"{when.strftime('%Y%m%dT%H%M%S%f')}-{token_hex(2)}"

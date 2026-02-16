@@ -20,10 +20,14 @@ def test_timer_settings_roundtrip(tmp_path: Path):
 
     settings.set_autosave_interval_min(3)
     settings.set_sound_enabled(True)
+    settings.set_sound_profile("chime")
+    settings.set_custom_sound_path(tmp_path / "alarm.wav")
     settings.set_default_folder(tmp_path)
 
     assert settings.get_autosave_interval_min() == 3
     assert settings.get_sound_enabled() is True
+    assert settings.get_sound_profile() == "chime"
+    assert settings.get_custom_sound_path() == tmp_path / "alarm.wav"
     assert settings.get_default_folder() == tmp_path
 
 
@@ -67,10 +71,15 @@ def test_focus_session_service_start_pause_stop(tmp_path: Path, monkeypatch):
     assert saved["count"] >= 1
 
     assert service.resume() is True
+    assert service.state is not None
+    assert len(service.state.break_spans_seconds) == 1
     log = service.stop()
     assert log is not None
     assert log["preset"] == "50/10"
     assert log["interruptions"] == 1
+    assert "actual_focus_min" in log
+    assert "expected_focus_min" in log
+    assert "break_total_sec" in log
 
     log_path = tmp_path / ".focusforge" / "logs"
     files = list(log_path.glob("*.jsonl"))

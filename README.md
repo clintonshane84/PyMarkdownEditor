@@ -1,6 +1,7 @@
 # PyMarkdownEditor
 
 A fast, minimal **PyQt6** Markdown editor with live preview, HTML/PDF export, and a clean, SOLID-friendly architecture.  
+This editor supports Focus Sessions: timed work blocks that auto-append structured Markdown timesheets into your notes.
 Owner-led governance; contributions welcome (see [CONTRIBUTING](CONTRIBUTING.md)).
 
 [![CI](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/ci.yml)
@@ -45,10 +46,14 @@ Owner-led governance; contributions welcome (see [CONTRIBUTING](CONTRIBUTING.md)
 - **Pomodoro focus timer + session notes**
   - `Timer` menu with: **Start Focus Session…**, **Pause / Resume**, **Stop & Save**, **Timer Settings…**.
   - Start flow collects title, tag, preset (`25/5`, `50/10`, or custom), and target folder.
-  - Creates and opens a new Markdown session note immediately with frontmatter + note template.
+  - Start on a **new note** or continue on the **current note**.
   - Detached floating timer window (always-on-top) with countdown + Pause/Stop controls.
-  - Timer color states: green (normal), amber (last ~20%), red (final ~90 seconds).
+  - Timer color states: green (normal), amber (warning), red (final stretch).
   - Auto-save active session note every N minutes (default `2`), and on pause/stop/app close.
+  - Session footer updates in-place with a consultant-friendly summary:
+    1) what you worked on, 2) when, 3) actual vs expected duration, 4) interruption count, 5) interruption time cost.
+  - Alarm options: built-in profiles (`Beep`, `Chime`, `Bell`, `Ping`) or custom sound file with preview.
+  - Timer settings persist locally on disk (no reconfiguration each launch).
   - Appends local JSONL session logs to `~/.focusforge/logs/YYYY-MM-DD.jsonl`.
 
 - **Architecture**
@@ -166,6 +171,22 @@ Dev/test tools live in `dev-requirements.txt`—see **Testing**.
 
 ---
 
+## Why This Helps
+
+- **Consultant-ready time capture**  
+  Turn regular Markdown notes into lightweight session evidence you can use for reporting and billing support.
+
+- **Lower context-switch overhead**  
+  Timer and notes live in one tool, so there is no need to bounce between editor + timer + tracker apps.
+
+- **Interruption visibility**  
+  You capture not just total work time, but also interruption count and interruption duration.
+
+- **Local-first and private**  
+  Data stays on your machine: notes in your folders, logs in `~/.focusforge/logs/`, settings in local app config.
+
+---
+
 ## Project Structure
 
 High-level repo layout:
@@ -195,6 +216,8 @@ High-level repo layout:
 │   ├── test_container.py
 │   ├── test_exporter_registry.py
 │   ├── test_file_service.py
+│   ├── test_focus_dialogs.py
+│   ├── test_focus_services.py
 │   ├── test_html_exporter.py
 │   ├── test_ini_config_service.py
 │   ├── test_main_window.py

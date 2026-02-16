@@ -606,6 +606,18 @@ def test_status_message_on_save(window: MainWindow, tmp_path: Path):
     assert window.statusBar().currentMessage() != ""
 
 
+def test_new_file_marks_clean_after_discard(window: MainWindow, monkeypatch):
+    window.editor.setPlainText("draft")
+    assert window.doc.modified is True
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.Yes,
+    )
+    window._new_file()
+    assert window.doc.modified is False
+    assert window.editor.toPlainText() == ""
+
+
 def test_focus_start_pause_stop_flow(window: MainWindow, monkeypatch, qapp, tmp_path: Path):
     monkeypatch.setattr(
         "pymd.services.ui.main_window.StartSessionDialog.get_result",
@@ -636,6 +648,14 @@ def test_focus_start_pause_stop_flow(window: MainWindow, monkeypatch, qapp, tmp_
     qapp.processEvents()
     assert window.focus_service.state is not None
     assert window.focus_service.state.paused is True
+    text = window.editor.toPlainText()
+    assert "### Focus Session (" in text
+    assert "**Time:** actual" in text
+    assert "**Interruptions:**" in text
+    assert "ON BREAK" in text
+    assert text.count("### Focus Session (") == 1
+    assert "<!-- focus-meta:" in text
+    assert "status=paused" in text
 
     window._toggle_focus_pause_resume()
     qapp.processEvents()
@@ -647,6 +667,39 @@ def test_focus_start_pause_stop_flow(window: MainWindow, monkeypatch, qapp, tmp_
     assert logs["n"] == 1
     assert window.act_pause_resume_focus.isEnabled() is False
     assert window.act_stop_focus.isEnabled() is False
+
+
+def test_focus_summary_state_machine_no_duplicate_blocks(
+    window: MainWindow, monkeypatch, qapp, tmp_path: Path
+):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Timesheet Capture",
+            tag="Timesheet",
+            folder=tmp_path,
+            focus_minutes=30,
+            break_minutes=5,
+            use_current_note=True,
+        ),
+    )
+    note = tmp_path / "timesheet.md"
+    note.write_text("# Timesheet Capture\n", encoding="utf-8")
+    window._open_path(note)
+
+    window._start_focus_session()
+    qapp.processEvents()
+    for _ in range(3):
+        window._toggle_focus_pause_resume()
+        qapp.processEvents()
+        window._toggle_focus_pause_resume()
+        qapp.processEvents()
+    window._stop_focus_session()
+    qapp.processEvents()
+
+    text = window.editor.toPlainText()
+    assert text.count("### Focus Session (") == 1
+    assert text.count("**Work item:** Timesheet Capture (Timesheet)") == 1
 
 
 def test_focus_start_cancel_keeps_existing_session(window: MainWindow, monkeypatch, tmp_path: Path):
@@ -835,3 +888,83 @@ def test_main_window_chaos_monkey_shutdown_faults_show_feedback(
     window.close()
 
     assert counters["warn"] >= 1
+
+
+def test_focus_start_can_use_current_note(window: MainWindow, monkeypatch, tmp_path: Path):
+    p = tmp_path / "existing.md"
+    p.write_text("hello", encoding="utf-8")
+    window._open_path(p)
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Continue",
+            tag="C",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+            use_current_note=True,
+        ),
+    )
+    window._start_focus_session()
+    assert window.focus_service.state is not None
+    assert window.focus_service.state.note_path == p
+    assert window.doc.path == p
+    text = window.editor.toPlainText()
+    assert "### Focus Session (" in text
+    assert "**Work item:** Continue (C)" in text
+    assert "**Time:** actual" in text
+    assert "**Interruptions:** **0** (total **0m 0s**)" in text
+    assert text.count("### Focus Session (") == 1
+    assert "<!-- focus-meta:" in text
+    assert "status=active" in text
+    assert "<!-- focus-session-stats:start -->" not in text
+
+
+def test_focus_color_thresholds_include_amber_for_short_session(window: MainWindow):
+    # For 2-minute timer, amber should appear before red.
+    assert window._color_level_for_remaining(120, 120) == "green"
+    assert window._color_level_for_remaining(30, 120) == "amber"
+    assert window._color_level_for_remaining(10, 120) == "red"
+
+
+def test_focus_finish_sound_uses_fallback_beep_when_qsound_unavailable(
+    window: MainWindow, monkeypatch
+):
+    calls = {"n": 0}
+    monkeypatch.setattr(window, "_play_qsoundeffect_alarm", lambda: False)
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QApplication.beep",
+        lambda: calls.__setitem__("n", calls["n"] + 1),
+    )
+    window._play_finish_sound()
+    assert calls["n"] == 1
+
+
+def test_focus_finish_sound_uses_selected_profile(window: MainWindow, monkeypatch, tmp_path: Path):
+    calls = {"beep": 0, "play": 0}
+    monkeypatch.setattr(window.timer_settings, "get_sound_profile", lambda: "chime")
+    monkeypatch.setattr(window, "_resolve_alarm_sound_path", lambda profile: tmp_path / "x.wav")
+    monkeypatch.setattr(
+        window,
+        "_play_qsoundeffect_alarm",
+        lambda sound_path: calls.__setitem__("play", calls["play"] + 1) or True,
+    )
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QApplication.beep",
+        lambda: calls.__setitem__("beep", calls["beep"] + 1),
+    )
+    window._play_finish_sound()
+    assert calls["play"] == 1
+    assert calls["beep"] == 0
+
+
+def test_focus_finish_sound_custom_missing_falls_back_to_beep(window: MainWindow, monkeypatch):
+    calls = {"beep": 0}
+    monkeypatch.setattr(window.timer_settings, "get_sound_profile", lambda: "custom")
+    monkeypatch.setattr(window, "_resolve_alarm_sound_path", lambda profile: None)
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QApplication.beep",
+        lambda: calls.__setitem__("beep", calls["beep"] + 1),
+    )
+    window._play_finish_sound()
+    assert calls["beep"] == 1

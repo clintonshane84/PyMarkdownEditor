@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import QSettings
 
 from pymd.domain.interfaces import (
@@ -89,7 +91,7 @@ class Container:
         application: str = "PyMarkdownEditor",
     ) -> Container:
         if qsettings is None:
-            qsettings = QSettings(organization, application)
+            qsettings = Container._build_default_qsettings(organization, application)
         return Container(qsettings=qsettings)
 
     # ---------- Internals ----------
@@ -108,6 +110,18 @@ class Container:
             exporter_registry.get("pdf")
         except KeyError:
             exporter_registry.register(WebEnginePdfExporter())
+
+    @staticmethod
+    def _build_default_qsettings(organization: str, application: str) -> QSettings:
+        config_dir = QSettings(
+            QSettings.Format.IniFormat,
+            QSettings.Scope.UserScope,
+            organization,
+            application,
+        ).fileName()
+        config_path = Path(config_dir)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        return QSettings(str(config_path), QSettings.Format.IniFormat)
 
     # ---------- UI factories ----------
 
