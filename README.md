@@ -42,6 +42,15 @@ Owner-led governance; contributions welcome (see [CONTRIBUTING](CONTRIBUTING.md)
   - **Find / Replace / Replace all** dialog.
   - Toggle **wrap** and **preview** from toolbar/menu.
 
+- **Pomodoro focus timer + session notes**
+  - `Timer` menu with: **Start Focus Session…**, **Pause / Resume**, **Stop & Save**, **Timer Settings…**.
+  - Start flow collects title, tag, preset (`25/5`, `50/10`, or custom), and target folder.
+  - Creates and opens a new Markdown session note immediately with frontmatter + note template.
+  - Detached floating timer window (always-on-top) with countdown + Pause/Stop controls.
+  - Timer color states: green (normal), amber (last ~20%), red (final ~90 seconds).
+  - Auto-save active session note every N minutes (default `2`), and on pause/stop/app close.
+  - Appends local JSONL session logs to `~/.focusforge/logs/YYYY-MM-DD.jsonl`.
+
 - **Architecture**
   - SOLID-leaning design with clear boundaries.
   - Simple dependency injection container.
@@ -137,6 +146,8 @@ Dev/test tools live in `dev-requirements.txt`—see **Testing**.
 * **Insert link…** – opens the link dialog.
 * **Insert image…** – opens a file chooser and inserts an image reference.
 * **Insert table…** – opens the table dialog to generate Markdown tables.
+* **Start Focus Session…** – opens the pomodoro/session setup dialog.
+* **Timer Settings…** – configure timer auto-save interval, sound toggle, and default session folder.
 * **About…** – opens the About dialog.
 
 **Find & replace**
@@ -144,6 +155,12 @@ Dev/test tools live in `dev-requirements.txt`—see **Testing**.
 * **Find…** – open the find dialog.
 * **Replace…** – open find/replace dialog.
 * **Replace all** – replace all matches in the document.
+
+**Timer**
+
+* **Pause / Resume** – pauses or resumes the active focus session.
+* **Stop & Save** – stops the active session and writes a session log entry.
+* **Floating Timer Window** – detached always-on-top countdown with Pause/Stop buttons.
 
 (Exact keyboard accelerators may vary slightly by platform/Qt style, but all are exposed via menus and toolbars.)
 
@@ -208,6 +225,11 @@ High-level repo layout:
     │   │   ├── html_exporter.py
     │   │   ├── pdf_exporter.py
     │   │   └── web_pdf_exporter.py
+    │   ├── focus/
+    │   │   ├── __init__.py
+    │   │   ├── focus_session_service.py
+    │   │   ├── session_writer.py
+    │   │   └── timer_settings.py
     │   ├── file_service.py
     │   ├── markdown_renderer.py
     │   ├── settings_service.py
@@ -215,7 +237,9 @@ High-level repo layout:
     │       ├── __init__.py
     │       ├── about.py
     │       ├── create_link.py
+    │       ├── floating_timer_window.py
     │       ├── find_replace.py
+    │       ├── focus_dialogs.py
     │       ├── main_window.py
     │       ├── table_dialog.py
     │       ├── adapters/
@@ -255,11 +279,13 @@ High-level repo layout:
   * `markdown_renderer.py` – wraps Markdown + extensions.
   * `file_service.py` – safe file IO with atomic writes.
   * `settings_service.py` / `config/ini_config_service.py` – settings and INI-based config.
+  * `focus/` – focus session service, note template writer, and timer settings persistence.
   * `exporters/` – HTML/PDF/Web PDF exporters behind a common base.
 
 * **`pymd/services/ui/`**
 
   * `main_window.py` – main editor window.
+  * `focus_dialogs.py`, `floating_timer_window.py` – pomodoro/session UI.
   * `about.py` – About dialog.
   * `create_link.py`, `find_replace.py`, `table_dialog.py` – feature dialogs.
   * `adapters/` – Qt-specific implementations of dialog, message, and text editor ports.

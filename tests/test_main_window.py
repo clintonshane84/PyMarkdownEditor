@@ -10,6 +10,7 @@ from pymd.domain.interfaces import IExporter, IExporterRegistry
 from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
+from pymd.services.ui.focus_dialogs import SessionDialogResult
 from pymd.services.ui.main_window import MainWindow
 from pymd.utils.constants import MAX_RECENTS
 
@@ -603,3 +604,46 @@ def test_status_message_on_save(window: MainWindow, tmp_path: Path):
     assert window._write_to(p)
     # QStatusBar text is transient; check it is non-empty immediately
     assert window.statusBar().currentMessage() != ""
+
+
+def test_focus_start_pause_stop_flow(window: MainWindow, monkeypatch, qapp, tmp_path: Path):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Power Apps recap",
+            tag="PL-900",
+            folder=tmp_path,
+            focus_minutes=50,
+            break_minutes=10,
+        ),
+    )
+    logs = {"n": 0}
+    monkeypatch.setattr(
+        window.session_writer,
+        "append_log",
+        lambda **kwargs: logs.__setitem__("n", logs["n"] + 1),
+    )
+
+    window._start_focus_session()
+    qapp.processEvents()
+
+    assert window.focus_service.state is not None
+    assert window.doc.path == window.focus_service.state.note_path
+    assert window.act_pause_resume_focus.isEnabled() is True
+    assert window.act_stop_focus.isEnabled() is True
+
+    window._toggle_focus_pause_resume()
+    qapp.processEvents()
+    assert window.focus_service.state is not None
+    assert window.focus_service.state.paused is True
+
+    window._toggle_focus_pause_resume()
+    qapp.processEvents()
+    assert window.focus_service.state is not None
+    assert window.focus_service.state.paused is False
+
+    window._stop_focus_session()
+    qapp.processEvents()
+    assert logs["n"] == 1
+    assert window.act_pause_resume_focus.isEnabled() is False
+    assert window.act_stop_focus.isEnabled() is False

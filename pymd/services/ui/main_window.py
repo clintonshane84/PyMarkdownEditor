@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QByteArray, Qt
+from PyQt6.QtCore import QByteArray, QSettings, Qt
 from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
@@ -21,8 +21,16 @@ from PyQt6.QtWidgets import (
 from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
 from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
+from pymd.services.focus import (
+    FocusSessionService,
+    SessionWriter,
+    StartSessionRequest,
+    TimerSettings,
+)
 from pymd.services.ui.create_link import CreateLinkDialog
+from pymd.services.ui.floating_timer_window import FloatingTimerWindow
 from pymd.services.ui.find_replace import FindReplaceDialog
+from pymd.services.ui.focus_dialogs import StartSessionDialog, TimerSettingsDialog
 from pymd.services.ui.table_dialog import TableDialog
 from pymd.utils.constants import MAX_RECENTS
 
@@ -47,6 +55,23 @@ class MainWindow(QMainWindow):
         self.renderer = renderer
         self.file_service = file_service
         self.settings = settings
+        self.timer_settings = TimerSettings(self._resolve_qsettings(settings))
+        self.session_writer = SessionWriter(self.file_service)
+        self.focus_service = FocusSessionService(
+            writer=self.session_writer,
+            timer_settings=self.timer_settings,
+            save_active_note=self._save_active_session_note,
+            on_finish_sound=lambda: QApplication.beep(),
+            parent=self,
+        )
+        self.timer_window = FloatingTimerWindow(self)
+        self.timer_window.hide()
+        self.timer_window.pause_resume_clicked.connect(self._toggle_focus_pause_resume)
+        self.timer_window.stop_clicked.connect(self._stop_focus_session)
+        self.focus_service.tick.connect(self._on_focus_tick)
+        self.focus_service.state_changed.connect(self._on_focus_state_changed)
+        self.focus_service.session_started.connect(self._on_focus_started)
+        self.focus_service.session_stopped.connect(self._on_focus_stopped)
 
         # Registry instance (defaults to singleton)
         self._exporters = exporter_registry or ExporterRegistryInst
@@ -188,6 +213,20 @@ class MainWindow(QMainWindow):
         self.act_replace.setShortcut(QKeySequence.StandardKey.Replace)
         self.act_replace.triggered.connect(self._show_replace)
 
+        # Timer actions
+        self.act_start_focus = QAction(
+            "Start Focus Session…", self, triggered=self._start_focus_session
+        )
+        self.act_pause_resume_focus = QAction(
+            "Pause", self, triggered=self._toggle_focus_pause_resume
+        )
+        self.act_pause_resume_focus.setEnabled(False)
+        self.act_stop_focus = QAction("Stop & Save", self, triggered=self._stop_focus_session)
+        self.act_stop_focus.setEnabled(False)
+        self.act_timer_settings = QAction(
+            "Timer Settings…", self, triggered=self._open_timer_settings
+        )
+
     def _build_toolbar(self):
         tb = QToolBar("Main", self)
         tbf = QToolBar("Formatting", self)
@@ -264,6 +303,14 @@ class MainWindow(QMainWindow):
         # Find/Replace
         for a in (self.act_find, self.act_find_prev, self.act_find_next, self.act_replace):
             editm.addAction(a)
+
+        timerm = m.addMenu("&Timer")
+        timerm.addAction(self.act_start_focus)
+        timerm.addSeparator()
+        timerm.addAction(self.act_pause_resume_focus)
+        timerm.addAction(self.act_stop_focus)
+        timerm.addSeparator()
+        timerm.addAction(self.act_timer_settings)
 
     def _refresh_recent_menu(self):
         self.recent_menu.clear()
@@ -449,8 +496,8 @@ class MainWindow(QMainWindow):
         if path_str:
             self._open_path(Path(path_str))
 
-    def _open_path(self, path: Path):
-        if not self._confirm_discard():
+    def _open_path(self, path: Path, *, confirm_discard: bool = True):
+        if confirm_discard and not self._confirm_discard():
             return
         try:
             text = self.file_service.read_text(path)
@@ -482,12 +529,13 @@ class MainWindow(QMainWindow):
             self._update_title()
             self._add_recent(path)
 
-    def _write_to(self, path: Path) -> bool:
+    def _write_to(self, path: Path, *, silent: bool = False) -> bool:
         try:
             self.file_service.write_text_atomic(path, self.editor.toPlainText())
             self.doc.modified = False
             self._update_title()
-            self.statusBar().showMessage(f"Saved: {path}", 3000)
+            if not silent:
+                self.statusBar().showMessage(f"Saved: {path}", 3000)
             return True
         except Exception as e:
             QMessageBox.critical(self, "Save Error", f"Failed to save file:\n{e}")
@@ -556,6 +604,88 @@ class MainWindow(QMainWindow):
         self.settings.set_recent(self.recents)
         self._refresh_recent_menu()
 
+    # ---------- Focus Session ----------
+    def _start_focus_session(self) -> None:
+        if not self._confirm_discard():
+            return
+        if self.focus_service.state and not self.focus_service.state.stopped:
+            self._stop_focus_session()
+
+        dlg = StartSessionDialog(timer_settings=self.timer_settings, parent=self)
+        result = dlg.get_result()
+        if result is None:
+            return
+
+        req = StartSessionRequest(
+            title=result.title,
+            tag=result.tag,
+            folder=result.folder,
+            focus_minutes=result.focus_minutes,
+            break_minutes=result.break_minutes,
+        )
+        try:
+            state = self.focus_service.start_session(req)
+            self._open_path(state.note_path, confirm_discard=False)
+            self.timer_settings.set_default_folder(result.folder)
+        except Exception as e:
+            QMessageBox.critical(self, "Timer Error", f"Failed to start session:\n{e}")
+
+    def _toggle_focus_pause_resume(self) -> None:
+        state = self.focus_service.state
+        if not state or state.stopped:
+            return
+        if state.paused:
+            self.focus_service.resume()
+        else:
+            self.focus_service.pause()
+
+    def _stop_focus_session(self) -> None:
+        self.focus_service.stop()
+
+    def _open_timer_settings(self) -> None:
+        dlg = TimerSettingsDialog(timer_settings=self.timer_settings, parent=self)
+        dlg.exec()
+
+    def _on_focus_started(self, state) -> None:
+        self.timer_window.set_paused(False)
+        self.timer_window.set_countdown(state.remaining_seconds)
+        pos = self.timer_settings.get_timer_window_pos()
+        if pos is not None:
+            self.timer_window.move(pos)
+        self.timer_window.show()
+        self.timer_window.raise_()
+        self.statusBar().showMessage(f"Focus started: {state.preset_label}", 3000)
+
+    def _on_focus_stopped(self, entry: dict[str, object]) -> None:
+        self.timer_settings.set_timer_window_pos(self.timer_window.pos())
+        self.timer_window.hide()
+        duration = entry.get("duration_min")
+        self.statusBar().showMessage(f"Session saved ({duration} min)", 3000)
+
+    def _on_focus_state_changed(self, is_active: bool, is_paused: bool) -> None:
+        self.act_pause_resume_focus.setEnabled(is_active)
+        self.act_pause_resume_focus.setText("Resume" if is_paused else "Pause")
+        self.act_stop_focus.setEnabled(is_active)
+        self.timer_window.set_paused(is_paused)
+
+    def _on_focus_tick(self, remaining_seconds: int, total_seconds: int) -> None:
+        self.timer_window.set_countdown(remaining_seconds)
+        amber_threshold = max(60, int(total_seconds * 0.20))
+        if remaining_seconds <= 90:
+            self.timer_window.set_color_state("red")
+        elif remaining_seconds <= amber_threshold:
+            self.timer_window.set_color_state("amber")
+        else:
+            self.timer_window.set_color_state("green")
+
+    def _save_active_session_note(self) -> bool:
+        state = self.focus_service.state
+        if not state or state.stopped:
+            return False
+        if self.doc.path is None or self.doc.path != state.note_path:
+            return False
+        return self._write_to(state.note_path, silent=True)
+
     # ---------- DnD ----------
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
@@ -571,9 +701,17 @@ class MainWindow(QMainWindow):
 
     # ---------- Close ----------
     def closeEvent(self, event):
+        self.focus_service.stop()
+        self.timer_settings.set_timer_window_pos(self.timer_window.pos())
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)
+
+    def _resolve_qsettings(self, settings: ISettingsService) -> QSettings:
+        qsettings = getattr(settings, "_s", None)
+        if isinstance(qsettings, QSettings):
+            return qsettings
+        return QSettings()
 
     # ---------- Internal: preview creation ----------
     def _create_preview_widget(self):
