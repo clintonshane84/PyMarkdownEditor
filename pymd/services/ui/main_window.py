@@ -28,8 +28,8 @@ from pymd.services.focus import (
     TimerSettings,
 )
 from pymd.services.ui.create_link import CreateLinkDialog
-from pymd.services.ui.floating_timer_window import FloatingTimerWindow
 from pymd.services.ui.find_replace import FindReplaceDialog
+from pymd.services.ui.floating_timer_window import FloatingTimerWindow
 from pymd.services.ui.focus_dialogs import StartSessionDialog, TimerSettingsDialog
 from pymd.services.ui.table_dialog import TableDialog
 from pymd.utils.constants import MAX_RECENTS
@@ -72,6 +72,11 @@ class MainWindow(QMainWindow):
         self.focus_service.state_changed.connect(self._on_focus_state_changed)
         self.focus_service.session_started.connect(self._on_focus_started)
         self.focus_service.session_stopped.connect(self._on_focus_stopped)
+        self.focus_service.stop_failed.connect(self._on_focus_stop_failed)
+        self._shutdown_persisted = False
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._on_app_about_to_quit)
 
         # Registry instance (defaults to singleton)
         self._exporters = exporter_registry or ExporterRegistryInst
@@ -479,6 +484,9 @@ class MainWindow(QMainWindow):
         self.editor.setTextCursor(c)
 
     def _new_file(self):
+        if self._is_session_note_locked():
+            self._show_session_lock_warning("create a new file")
+            return
         if not self._confirm_discard():
             return
         self.doc = Document(path=None, text="", modified=False)
@@ -487,6 +495,9 @@ class MainWindow(QMainWindow):
         self._render_preview()
 
     def _open_dialog(self):
+        if self._is_session_note_locked():
+            self._show_session_lock_warning("open another file")
+            return
         path_str, _ = QFileDialog.getOpenFileName(
             self,
             "Open Markdown",
@@ -496,19 +507,23 @@ class MainWindow(QMainWindow):
         if path_str:
             self._open_path(Path(path_str))
 
-    def _open_path(self, path: Path, *, confirm_discard: bool = True):
+    def _open_path(self, path: Path, *, confirm_discard: bool = True) -> bool:
+        if self._is_session_note_locked() and not self._is_current_session_note_path(path):
+            self._show_session_lock_warning("open another file")
+            return False
         if confirm_discard and not self._confirm_discard():
-            return
+            return False
         try:
             text = self.file_service.read_text(path)
         except Exception as e:
             QMessageBox.critical(self, "Open Error", f"Failed to open file:\n{e}")
-            return
+            return False
         self.doc = Document(path=path, text=text, modified=False)
         self.editor.setPlainText(text)
         self._update_title()
         self._render_preview()
         self._add_recent(path)
+        return True
 
     def _save(self):
         if self.doc.path is None:
@@ -517,6 +532,9 @@ class MainWindow(QMainWindow):
         self._write_to(self.doc.path)
 
     def _save_as(self):
+        if self._is_session_note_locked():
+            self._show_session_lock_warning("save this session under a different filename")
+            return
         start = str(self.doc.path) if self.doc.path else ""
         path_str, _ = QFileDialog.getSaveFileName(
             self, "Save As", start, "Markdown (*.md);;All files (*)"
@@ -608,13 +626,17 @@ class MainWindow(QMainWindow):
     def _start_focus_session(self) -> None:
         if not self._confirm_discard():
             return
-        if self.focus_service.state and not self.focus_service.state.stopped:
-            self._stop_focus_session()
 
         dlg = StartSessionDialog(timer_settings=self.timer_settings, parent=self)
         result = dlg.get_result()
         if result is None:
             return
+
+        if self.focus_service.is_active and not self._confirm_replace_active_session():
+            return
+
+        if self.focus_service.is_active:
+            self._stop_focus_session()
 
         req = StartSessionRequest(
             title=result.title,
@@ -657,7 +679,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Focus started: {state.preset_label}", 3000)
 
     def _on_focus_stopped(self, entry: dict[str, object]) -> None:
-        self.timer_settings.set_timer_window_pos(self.timer_window.pos())
+        self._persist_timer_window_pos()
         self.timer_window.hide()
         duration = entry.get("duration_min")
         self.statusBar().showMessage(f"Session saved ({duration} min)", 3000)
@@ -667,6 +689,7 @@ class MainWindow(QMainWindow):
         self.act_pause_resume_focus.setText("Resume" if is_paused else "Pause")
         self.act_stop_focus.setEnabled(is_active)
         self.timer_window.set_paused(is_paused)
+        self._set_session_lock_ui(is_active)
 
     def _on_focus_tick(self, remaining_seconds: int, total_seconds: int) -> None:
         self.timer_window.set_countdown(remaining_seconds)
@@ -686,12 +709,25 @@ class MainWindow(QMainWindow):
             return False
         return self._write_to(state.note_path, silent=True)
 
+    def _on_focus_stop_failed(self, message: str) -> None:
+        self.statusBar().showMessage(message, 5000)
+        QMessageBox.warning(self, "Session Stop Warning", message)
+
+    def _safe_autosave(self) -> bool:
+        return self.focus_service.safe_autosave()
+
+    def _on_app_about_to_quit(self) -> None:
+        self._persist_shutdown_state()
+
     # ---------- DnD ----------
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
     def dropEvent(self, e):
+        if self._is_session_note_locked():
+            self._show_session_lock_warning("open dropped files")
+            return
         urls = e.mimeData().urls()
         if not urls:
             return
@@ -701,17 +737,60 @@ class MainWindow(QMainWindow):
 
     # ---------- Close ----------
     def closeEvent(self, event):
-        self.focus_service.stop()
-        self.timer_settings.set_timer_window_pos(self.timer_window.pos())
+        self._persist_shutdown_state()
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)
 
     def _resolve_qsettings(self, settings: ISettingsService) -> QSettings:
+        qsettings = getattr(settings, "qsettings", None)
+        if isinstance(qsettings, QSettings):
+            return qsettings
         qsettings = getattr(settings, "_s", None)
         if isinstance(qsettings, QSettings):
             return qsettings
         return QSettings()
+
+    def _is_session_note_locked(self) -> bool:
+        return self.focus_service.is_active
+
+    def _is_current_session_note_path(self, path: Path) -> bool:
+        state = self.focus_service.state
+        return state is not None and not state.stopped and state.note_path == path
+
+    def _show_session_lock_warning(self, action: str) -> None:
+        QMessageBox.information(
+            self,
+            "Session Locked",
+            f"Stop the active focus session before trying to {action}.",
+        )
+
+    def _confirm_replace_active_session(self) -> bool:
+        resp = QMessageBox.question(
+            self,
+            "Replace active session?",
+            "A focus session is active. Stop it and start a new one?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        return resp == QMessageBox.StandardButton.Yes
+
+    def _set_session_lock_ui(self, locked: bool) -> None:
+        self.act_new.setEnabled(not locked)
+        self.act_open.setEnabled(not locked)
+        self.act_save_as.setEnabled(not locked)
+        self.recent_menu.setEnabled(not locked)
+
+    def _persist_timer_window_pos(self) -> None:
+        if self.timer_window.isVisible():
+            self.timer_settings.set_timer_window_pos(self.timer_window.pos())
+
+    def _persist_shutdown_state(self) -> None:
+        if self._shutdown_persisted:
+            return
+        self._shutdown_persisted = True
+        self._safe_autosave()
+        self.focus_service.stop()
+        self._persist_timer_window_pos()
 
     # ---------- Internal: preview creation ----------
     def _create_preview_widget(self):

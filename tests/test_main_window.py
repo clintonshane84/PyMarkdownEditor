@@ -647,3 +647,191 @@ def test_focus_start_pause_stop_flow(window: MainWindow, monkeypatch, qapp, tmp_
     assert logs["n"] == 1
     assert window.act_pause_resume_focus.isEnabled() is False
     assert window.act_stop_focus.isEnabled() is False
+
+
+def test_focus_start_cancel_keeps_existing_session(window: MainWindow, monkeypatch, tmp_path: Path):
+    results = [
+        SessionDialogResult(
+            title="Session One",
+            tag="A",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+        ),
+        None,
+    ]
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: results.pop(0),
+    )
+    logs = {"n": 0}
+    monkeypatch.setattr(
+        window.session_writer,
+        "append_log",
+        lambda **kwargs: logs.__setitem__("n", logs["n"] + 1),
+    )
+    window._start_focus_session()
+    active_id = window.focus_service.state.session_id if window.focus_service.state else None
+    window._start_focus_session()
+    assert window.focus_service.is_active is True
+    assert window.focus_service.state is not None
+    assert window.focus_service.state.session_id == active_id
+    assert logs["n"] == 0
+
+
+def test_focus_start_replace_requires_confirmation(window: MainWindow, monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Session Two",
+            tag="B",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+        ),
+    )
+    window._start_focus_session()
+    first_id = window.focus_service.state.session_id if window.focus_service.state else None
+
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.No,
+    )
+    window._start_focus_session()
+    assert window.focus_service.state is not None
+    assert window.focus_service.state.session_id == first_id
+
+
+def test_focus_active_session_locks_navigation(window: MainWindow, monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Locked Session",
+            tag="L",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+        ),
+    )
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.information",
+        lambda *a, **k: None,
+    )
+    window._start_focus_session()
+    assert window.focus_service.state is not None
+    note_path = window.focus_service.state.note_path
+
+    other = tmp_path / "other.md"
+    other.write_text("other", encoding="utf-8")
+    assert window._open_path(other) is False
+    assert window.doc.path == note_path
+
+    old_text = window.editor.toPlainText()
+    window._new_file()
+    assert window.editor.toPlainText() == old_text
+
+
+def test_close_does_not_crash_when_focus_log_write_fails(
+    window: MainWindow, monkeypatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Fail Log",
+            tag="F",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+        ),
+    )
+    monkeypatch.setattr(
+        window.session_writer,
+        "append_log",
+        lambda **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    warnings = {"n": 0}
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.warning",
+        lambda *a, **k: warnings.__setitem__("n", warnings["n"] + 1),
+    )
+    window._start_focus_session()
+    window.close()
+    assert warnings["n"] >= 1
+
+
+def test_close_persists_shutdown_once_and_calls_safe_autosave(
+    window: MainWindow, monkeypatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Shutdown",
+            tag="S",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+        ),
+    )
+    window._start_focus_session()
+
+    calls = {"autosave": 0, "stop": 0}
+    monkeypatch.setattr(
+        window.focus_service,
+        "safe_autosave",
+        lambda: calls.__setitem__("autosave", calls["autosave"] + 1) or True,
+    )
+    monkeypatch.setattr(
+        window.focus_service,
+        "stop",
+        lambda: calls.__setitem__("stop", calls["stop"] + 1) or None,
+    )
+
+    window._on_app_about_to_quit()
+    window.close()
+
+    assert calls["autosave"] == 1
+    assert calls["stop"] == 1
+
+
+def test_main_window_chaos_monkey_shutdown_faults_show_feedback(
+    window: MainWindow, monkeypatch, tmp_path: Path
+):
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.StartSessionDialog.get_result",
+        lambda self: SessionDialogResult(
+            title="Chaos Shutdown",
+            tag="CS",
+            folder=tmp_path,
+            focus_minutes=25,
+            break_minutes=5,
+        ),
+    )
+    window._start_focus_session()
+    assert window.focus_service.is_active is True
+
+    counters = {"save": 0, "log": 0, "warn": 0}
+
+    def flaky_save() -> bool:
+        counters["save"] += 1
+        if counters["save"] % 2 == 1:
+            raise OSError("autosave down")
+        return True
+
+    def flaky_log(**kwargs):
+        counters["log"] += 1
+        if counters["log"] % 2 == 1:
+            raise OSError("log down")
+        return tmp_path / "ok.jsonl"
+
+    monkeypatch.setattr(
+        "pymd.services.ui.main_window.QMessageBox.warning",
+        lambda *a, **k: counters.__setitem__("warn", counters["warn"] + 1),
+    )
+    monkeypatch.setattr(window.focus_service, "_save_active_note", flaky_save)
+    monkeypatch.setattr(window.session_writer, "append_log", flaky_log)
+
+    window._safe_autosave()
+    window._on_app_about_to_quit()
+    window.close()
+
+    assert counters["warn"] >= 1

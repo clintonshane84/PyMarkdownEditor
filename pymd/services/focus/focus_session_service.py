@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
@@ -46,6 +46,7 @@ class FocusSessionService(QObject):
     state_changed = pyqtSignal(bool, bool)  # is_active, is_paused
     session_started = pyqtSignal(object)  # FocusSessionState
     session_stopped = pyqtSignal(object)  # dict log entry
+    stop_failed = pyqtSignal(str)
 
     def __init__(
         self,
@@ -74,12 +75,20 @@ class FocusSessionService(QObject):
     def state(self) -> FocusSessionState | None:
         return self._state
 
+    @property
+    def is_active(self) -> bool:
+        return self._state is not None and not self._state.stopped
+
+    @property
+    def is_paused(self) -> bool:
+        return self.is_active and bool(self._state and self._state.paused)
+
     def start_session(self, req: StartSessionRequest) -> FocusSessionState:
-        if self._state and not self._state.stopped:
-            self.stop()
+        if self.is_active:
+            raise RuntimeError("Cannot start a new focus session while another is active.")
 
         start_at = datetime.now().astimezone()
-        session_id = start_at.strftime("%Y%m%dT%H%M%S")
+        session_id = self._build_session_id(start_at)
         note_path = self._writer.create_note(
             folder=req.folder,
             session_id=session_id,
@@ -133,25 +142,28 @@ class FocusSessionService(QObject):
             return None
         self._countdown.stop()
         self._autosave.stop()
-        self._autosave_now()
+        self.safe_autosave()
 
         now = datetime.now().astimezone()
         state = self._state
         state.stopped = True
 
-        planned_duration = state.focus_minutes
+        configured_focus_minutes = state.focus_minutes
         entry: dict[str, object] = {
             "id": state.session_id,
             "start": state.start_at.isoformat(timespec="seconds"),
             "end": now.isoformat(timespec="seconds"),
-            "duration_min": planned_duration,
+            "duration_min": configured_focus_minutes,
             "preset": state.preset_label,
             "tag": state.tag,
             "title": state.title or "Focus Session",
             "note_path": str(state.note_path),
             "interruptions": state.interruptions,
         }
-        self._writer.append_log(log_entry=entry, at_time=now)
+        try:
+            self._writer.append_log(log_entry=entry, at_time=now)
+        except Exception as exc:
+            self.stop_failed.emit(f"Failed to append session log: {exc}")
         self.state_changed.emit(False, False)
         self.session_stopped.emit(entry)
         return entry
@@ -164,6 +176,16 @@ class FocusSessionService(QObject):
     def _autosave_now(self) -> None:
         self._save_active_note()
 
+    def safe_autosave(self) -> bool:
+        if not self.is_active:
+            return False
+        try:
+            self._autosave_now()
+            return True
+        except Exception as exc:
+            self.stop_failed.emit(f"Failed to auto-save active session note: {exc}")
+            return False
+
     def _on_tick(self) -> None:
         if not self._state or self._state.paused or self._state.stopped:
             return
@@ -174,3 +196,6 @@ class FocusSessionService(QObject):
             if self._timer_settings.get_sound_enabled() and self._on_finish_sound:
                 self._on_finish_sound()
             self.stop()
+
+    def _build_session_id(self, when: datetime) -> str:
+        return when.strftime("%Y%m%dT%H%M%S%f")

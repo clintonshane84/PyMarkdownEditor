@@ -14,6 +14,10 @@ class SettingsService(ISettingsService):
     def __init__(self, qsettings: QSettings) -> None:
         self._s = qsettings
 
+    @property
+    def qsettings(self) -> QSettings:
+        return self._s
+
     def get_geometry(self) -> bytes | None:
         v = self._s.value(SETTINGS_GEOMETRY)
         return bytes(v) if isinstance(v, QByteArray) else None

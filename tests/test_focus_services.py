@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PyQt6.QtCore import QSettings
 
 from pymd.services.file_service import FileService
@@ -76,3 +77,119 @@ def test_focus_session_service_start_pause_stop(tmp_path: Path, monkeypatch):
     assert files, "Expected at least one JSONL log file."
     log_content = files[0].read_text(encoding="utf-8")
     assert '"tag": "PL-900"' in log_content
+
+
+def test_focus_session_service_rejects_start_when_active(tmp_path: Path):
+    qs = QSettings(str(tmp_path / "session.ini"), QSettings.Format.IniFormat)
+    timer_settings = TimerSettings(qs)
+    service = FocusSessionService(
+        writer=SessionWriter(FileService()),
+        timer_settings=timer_settings,
+        save_active_note=lambda: True,
+    )
+    req = StartSessionRequest(
+        title="S1",
+        tag="A",
+        folder=tmp_path,
+        focus_minutes=25,
+        break_minutes=5,
+    )
+    service.start_session(req)
+    with pytest.raises(RuntimeError):
+        service.start_session(req)
+
+
+def test_focus_session_service_stop_emits_failure_but_does_not_raise(tmp_path: Path):
+    qs = QSettings(str(tmp_path / "session.ini"), QSettings.Format.IniFormat)
+    timer_settings = TimerSettings(qs)
+    writer = SessionWriter(FileService())
+    service = FocusSessionService(
+        writer=writer,
+        timer_settings=timer_settings,
+        save_active_note=lambda: True,
+    )
+    req = StartSessionRequest(
+        title="S1",
+        tag="A",
+        folder=tmp_path,
+        focus_minutes=25,
+        break_minutes=5,
+    )
+    service.start_session(req)
+    writer.append_log = lambda **kwargs: (_ for _ in ()).throw(OSError("log failure"))  # type: ignore[method-assign]
+    failures: list[str] = []
+    service.stop_failed.connect(failures.append)
+    entry = service.stop()
+    assert entry is not None
+    assert failures
+    assert "log failure" in failures[0]
+
+
+def test_focus_session_service_note_name_collision_gets_suffix(tmp_path: Path):
+    qs = QSettings(str(tmp_path / "session.ini"), QSettings.Format.IniFormat)
+    timer_settings = TimerSettings(qs)
+    service = FocusSessionService(
+        writer=SessionWriter(FileService()),
+        timer_settings=timer_settings,
+        save_active_note=lambda: True,
+    )
+    service._build_session_id = lambda _when: "20260216T141500000000"  # type: ignore[method-assign]
+    req = StartSessionRequest(
+        title="Power Apps recap",
+        tag="PL-900",
+        folder=tmp_path,
+        focus_minutes=50,
+        break_minutes=10,
+    )
+    first = service.start_session(req)
+    service.stop()
+    second = service.start_session(req)
+    assert first.note_path != second.note_path
+    assert second.note_path.name.endswith("-1.md")
+
+
+def test_focus_session_service_chaos_monkey_failures_are_contained(tmp_path: Path):
+    qs = QSettings(str(tmp_path / "session.ini"), QSettings.Format.IniFormat)
+    timer_settings = TimerSettings(qs)
+    service = FocusSessionService(
+        writer=SessionWriter(FileService()),
+        timer_settings=timer_settings,
+        save_active_note=lambda: True,
+    )
+    req = StartSessionRequest(
+        title="Chaos",
+        tag="X",
+        folder=tmp_path,
+        focus_minutes=25,
+        break_minutes=5,
+    )
+    state = service.start_session(req)
+    assert state.note_path.exists()
+
+    counters = {"save": 0, "log": 0}
+
+    def flaky_save() -> bool:
+        counters["save"] += 1
+        if counters["save"] % 2 == 0:
+            raise OSError("autosave chaos")
+        return True
+
+    def flaky_log(**kwargs):
+        counters["log"] += 1
+        if counters["log"] % 2 == 1:
+            raise OSError("log chaos")
+        return tmp_path / "ok.jsonl"
+
+    service._save_active_note = flaky_save  # type: ignore[assignment]
+    service._writer.append_log = flaky_log  # type: ignore[method-assign]
+
+    failures: list[str] = []
+    service.stop_failed.connect(failures.append)
+
+    assert service.safe_autosave() is True
+    assert service.safe_autosave() is False
+    assert service.pause() is True
+    assert service.resume() is True
+    assert service.stop() is not None
+    assert failures
+    assert any("autosave chaos" in msg or "log chaos" in msg for msg in failures)

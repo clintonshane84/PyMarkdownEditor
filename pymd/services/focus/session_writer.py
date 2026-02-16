@@ -27,7 +27,7 @@ class SessionWriter:
     ) -> Path:
         folder.mkdir(parents=True, exist_ok=True)
         slug = self._slugify(title) if title.strip() else "focus-session"
-        note_path = folder / f"{session_id}-{slug}.md"
+        note_path = self._next_available_path(folder / f"{session_id}-{slug}.md")
         note_body = self._build_template(
             session_id=session_id,
             start_at=start_at,
@@ -102,3 +102,15 @@ class SessionWriter:
                 prev_dash = True
         slug = "".join(chars).strip("-")
         return slug or "focus-session"
+
+    def _next_available_path(self, base_path: Path) -> Path:
+        if not base_path.exists():
+            return base_path
+        stem = base_path.stem
+        suffix = base_path.suffix
+        parent = base_path.parent
+        for i in range(1, 10_000):
+            candidate = parent / f"{stem}-{i}{suffix}"
+            if not candidate.exists():
+                return candidate
+        raise OSError(f"Unable to allocate unique note filename under: {parent}")
