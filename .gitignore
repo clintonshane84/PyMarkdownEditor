@@ -1,0 +1,27 @@
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Lint/type caches
+.ruff_cache/
+.mypy_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
