@@ -50,8 +50,9 @@ Owner-led governance; contributions welcome (see [CONTRIBUTING](CONTRIBUTING.md)
   - Detached floating timer window (always-on-top) with countdown + Pause/Stop controls.
   - Timer color states: green (normal), amber (warning), red (final stretch).
   - Auto-save active session note every N minutes (default `2`), and on pause/stop/app close.
-  - Session footer updates in-place with a consultant-friendly summary:
+  - Session summary updates in-place (pure Markdown) with a consultant-friendly format:
     1) what you worked on, 2) when, 3) actual vs expected duration, 4) interruption count, 5) interruption time cost.
+  - Includes hidden machine-friendly metadata (`focus-meta`) for future exports/charts/reporting.
   - Alarm options: built-in profiles (`Beep`, `Chime`, `Bell`, `Ping`) or custom sound file with preview.
   - Timer settings persist locally on disk (no reconfiguration each launch).
   - Appends local JSONL session logs to `~/.focusforge/logs/YYYY-MM-DD.jsonl`.
@@ -152,7 +153,7 @@ Dev/test tools live in `dev-requirements.txt`—see **Testing**.
 * **Insert image…** – opens a file chooser and inserts an image reference.
 * **Insert table…** – opens the table dialog to generate Markdown tables.
 * **Start Focus Session…** – opens the pomodoro/session setup dialog.
-* **Timer Settings…** – configure timer auto-save interval, sound toggle, and default session folder.
+* **Timer Settings…** – configure auto-save interval, sound enablement, alarm profile/custom sound with preview, and default session folder.
 * **About…** – opens the About dialog.
 
 **Find & replace**
@@ -166,6 +167,7 @@ Dev/test tools live in `dev-requirements.txt`—see **Testing**.
 * **Pause / Resume** – pauses or resumes the active focus session.
 * **Stop & Save** – stops the active session and writes a session log entry.
 * **Floating Timer Window** – detached always-on-top countdown with Pause/Stop buttons.
+* **Active Session Lock** – while a session is active, opening/switching to other notes is blocked to keep session capture consistent.
 
 (Exact keyboard accelerators may vary slightly by platform/Qt style, but all are exposed via menus and toolbars.)
 
