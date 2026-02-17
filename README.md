@@ -56,6 +56,10 @@ Owner-led governance; contributions welcome (see [CONTRIBUTING](CONTRIBUTING.md)
   - Alarm options: built-in profiles (`Beep`, `Chime`, `Bell`, `Ping`) or custom sound file with preview.
   - Timer settings persist locally on disk (no reconfiguration each launch).
   - Appends local JSONL session logs to `~/.focusforge/logs/YYYY-MM-DD.jsonl`.
+  
+  _Quick demo: starting a focus session, live timer, and auto-generated Markdown summary._
+  
+  ![Focus Timer Preview](docs/focus-timer-preview.gif)
 
 - **Architecture**
   - SOLID-leaning design with clear boundaries.
@@ -204,6 +208,7 @@ High-level repo layout:
 ├── docs/
 │   ├── CI.md
 │   ├── RELEASING.md
+│   ├── focus-timer-preview.gif
 │   └── screenshot.png
 ├── LICENSE
 ├── pyinstaller.spec
