@@ -953,9 +953,7 @@ class MainWindow(QMainWindow):
     def _session_block_pattern(self, session_id: str):
         return re.compile(
             r"\n*---\n\n### Focus Session \([^)]+\)\n\n"
-            r".*?\n\*\*Session:\*\* preset `[^`]+` \| id `"
-            + re.escape(session_id)
-            + r"`\n\n-\n*",
+            r".*?\n\*\*Session:\*\* preset `[^`]+` \| id `" + re.escape(session_id) + r"`\n\n-\n*",
             re.DOTALL,
         )
 
