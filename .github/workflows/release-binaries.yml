@@ -57,6 +57,8 @@ jobs:
             Linux)
               # Onefile CLI/GUI binary (no .app on Linux)
               pyinstaller -F -n PyMarkdownEditor \
+                --hidden-import backports \
+                --hidden-import backports.tarfile \
                 --hidden-import markdown \
                 --collect-submodules markdown \
                 --collect-submodules pygments \
@@ -72,6 +74,8 @@ jobs:
             macOS)
               # Produce a .app bundle on macOS (no -F)
               pyinstaller -n PyMarkdownEditor --windowed \
+                --hidden-import backports \
+                --hidden-import backports.tarfile \
                 --hidden-import markdown \
                 --collect-submodules markdown \
                 --collect-submodules pygments \
