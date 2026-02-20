@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Protocol, Sequence, cast
+from typing import Protocol, cast
 
 from PyQt6.QtCore import QObject, Qt, QTimer
 from PyQt6.QtWidgets import (
@@ -18,8 +19,8 @@ from PyQt6.QtWidgets import (
 )
 
 from pymd.plugins.catalog import PluginCatalogItem, default_catalog
+from pymd.plugins.pip_installer import PipResult, QtPipInstaller
 from pymd.plugins.state import IPluginStateStore
-from pymd.plugins.pip_installer import IPipInstaller, PipResult, QtPipInstaller
 from pymd.services.ui.plugins.pip_progress_dialog import PipProgressDialog
 
 
@@ -45,6 +46,7 @@ class InstalledPluginRow:
     `package` is optional but recommended:
     - Allows uninstall for plugins not present in the catalog.
     """
+
     plugin_id: str
     name: str
     version: str
@@ -77,7 +79,7 @@ class PluginsDialog(QDialog):
         *,
         parent=None,
         state: IPluginStateStore,
-            pip: QtPipInstaller,
+        pip: QtPipInstaller,
         get_installed: Callable[[], Sequence[InstalledPluginRow]],
         reload_plugins: Callable[[], None],
         catalog: Sequence[PluginCatalogItem] | None = None,
@@ -172,7 +174,9 @@ class PluginsDialog(QDialog):
         # catalog plugins not installed
         for c in self._catalog:
             if c.plugin_id not in installed:
-                rows.append((c.plugin_id, c.name, "", c.description, c.pip_package, "Catalog", "Install"))
+                rows.append(
+                    (c.plugin_id, c.name, "", c.description, c.pip_package, "Catalog", "Install")
+                )
 
         rows.sort(key=lambda x: (x[5] != "Installed", x[2] == "", x[1].lower(), x[0].lower()))
 
@@ -230,9 +234,20 @@ class PluginsDialog(QDialog):
         needle = self._search.text().strip().lower()
         for r in range(self.table.rowCount()):
             pid = (
-                self.table.item(r, self.COL_PLUGIN_ID).text() if self.table.item(r, self.COL_PLUGIN_ID) else "").lower()
-            name = (self.table.item(r, self.COL_NAME).text() if self.table.item(r, self.COL_NAME) else "").lower()
-            pkg = (self.table.item(r, self.COL_PACKAGE).text() if self.table.item(r, self.COL_PACKAGE) else "").lower()
+                self.table.item(r, self.COL_PLUGIN_ID).text()
+                if self.table.item(r, self.COL_PLUGIN_ID)
+                else ""
+            ).lower()
+            name = (
+                self.table.item(r, self.COL_NAME).text()
+                if self.table.item(r, self.COL_NAME)
+                else ""
+            ).lower()
+            pkg = (
+                self.table.item(r, self.COL_PACKAGE).text()
+                if self.table.item(r, self.COL_PACKAGE)
+                else ""
+            ).lower()
             show = not needle or (needle in pid or needle in name or needle in pkg)
             self.table.setRowHidden(r, not show)
 
@@ -306,7 +321,11 @@ class PluginsDialog(QDialog):
         dlg = PipProgressDialog(title, parent=self)
 
         pip_obj = self._pip
-        has_signals = isinstance(pip_obj, QObject) and hasattr(pip_obj, "output") and hasattr(pip_obj, "finished")
+        has_signals = (
+            isinstance(pip_obj, QObject)
+            and hasattr(pip_obj, "output")
+            and hasattr(pip_obj, "finished")
+        )
 
         if not has_signals:
             QMessageBox.critical(

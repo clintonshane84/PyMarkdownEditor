@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from PyQt6.QtCore import QByteArray, Qt
 from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
@@ -43,7 +44,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     SettingsService internals (keeps mypy/ruff happy).
     """
 
-    def __init__(self, window: "MainWindow") -> None:
+    def __init__(self, window: MainWindow) -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -72,7 +73,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
 
     # ---- plugin settings (namespaced) ----
     def get_plugin_setting(
-            self, plugin_id: str, key: str, default: str | None = None
+        self, plugin_id: str, key: str, default: str | None = None
     ) -> str | None:
         return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
@@ -84,14 +85,14 @@ class MainWindow(QMainWindow):
     """Thin PyQt window that delegates work to injected services (DIP)."""
 
     def __init__(
-            self,
-            renderer: IMarkdownRenderer,
-            file_service: IFileService,
-            settings: ISettingsService,
-            *,
-            exporter_registry: IExporterRegistry | None = None,
-            start_path: Path | None = None,
-            app_title: str = "PyMarkdownEditor",
+        self,
+        renderer: IMarkdownRenderer,
+        file_service: IFileService,
+        settings: ISettingsService,
+        *,
+        exporter_registry: IExporterRegistry | None = None,
+        start_path: Path | None = None,
+        app_title: str = "PyMarkdownEditor",
     ) -> None:
         super().__init__()
         self.setWindowTitle(app_title)
@@ -164,7 +165,9 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
+    def attach_plugins(
+        self, *, plugin_manager: object | None, plugin_installer: object | None
+    ) -> None:
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
         self._rebuild_plugin_actions()
@@ -263,16 +266,16 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_toggle_preview)
 
         for a in (
-                self.act_bold,
-                self.act_italic,
-                self.act_code,
-                self.act_code_block,
-                self.act_h1,
-                self.act_h2,
-                self.act_list,
-                self.act_img,
-                self.act_link,
-                self.act_table,
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_code_block,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+            self.act_img,
+            self.act_link,
+            self.act_table,
         ):
             tbf.addAction(a)
 
@@ -298,14 +301,14 @@ class MainWindow(QMainWindow):
 
         editm = m.addMenu("&Edit")
         for a in (
-                self.act_bold,
-                self.act_italic,
-                self.act_code,
-                self.act_code_block,
-                self.act_h1,
-                self.act_h2,
-                self.act_list,
-                self.act_table,
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_code_block,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+            self.act_table,
         ):
             editm.addAction(a)
         editm.addSeparator()
@@ -631,9 +634,7 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(
-                f"Exported {exporter.name.upper()}: {out_str}", 3000
-            )
+            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
         except Exception as e:
             QMessageBox.critical(
                 self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
@@ -684,11 +685,11 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- DnD -----------------------------
 
-    def dragEnterEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
+    def dragEnterEvent(self, e: Any) -> None:
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
-    def dropEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
+    def dropEvent(self, e: Any) -> None:
         urls = e.mimeData().urls()
         if not urls:
             return
@@ -698,7 +699,7 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Close -----------------------------
 
-    def closeEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
+    def closeEvent(self, event: Any) -> None:
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)
