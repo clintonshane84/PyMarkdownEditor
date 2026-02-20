@@ -20,7 +20,7 @@ class SettingsPluginStateStore(IPluginStateStore):
     settings: ISettingsService
 
     def _read_map(self) -> dict[str, bool]:
-        raw = getattr(self.settings, "get_raw")(SETTINGS_PLUGINS_ENABLED, "{}")
+        raw = self.settings.get_raw(SETTINGS_PLUGINS_ENABLED, "{}")
         try:
             if isinstance(raw, str):
                 return {str(k): bool(v) for k, v in json.loads(raw).items()}
@@ -29,7 +29,7 @@ class SettingsPluginStateStore(IPluginStateStore):
             return {}
 
     def _write_map(self, m: dict[str, bool]) -> None:
-        getattr(self.settings, "set_raw")(SETTINGS_PLUGINS_ENABLED, json.dumps(m))
+        self.settings.set_raw(SETTINGS_PLUGINS_ENABLED, json.dumps(m))
 
     def get_enabled(self, plugin_id: str, *, default: bool = False) -> bool:
         m = self._read_map()

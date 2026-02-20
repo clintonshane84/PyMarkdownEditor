@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Sequence
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
@@ -33,6 +33,7 @@ class InstalledPluginRow:
     - Keep it optional for backward compatibility; if missing, uninstall will be disabled
       unless the plugin exists in catalog.
     """
+
     plugin_id: str
     name: str
     version: str
@@ -166,7 +167,9 @@ class PluginsDialog(QDialog):
         # 2) catalog plugins that are not installed
         for c in self._catalog:
             if c.plugin_id not in installed:
-                rows.append((c.plugin_id, c.name, "", c.description, c.pip_package, "Catalog", "Install"))
+                rows.append(
+                    (c.plugin_id, c.name, "", c.description, c.pip_package, "Catalog", "Install")
+                )
 
         # stable ordering
         rows.sort(key=lambda x: (x[5] != "Installed", x[2] == "", x[1].lower(), x[0].lower()))
@@ -236,9 +239,21 @@ class PluginsDialog(QDialog):
     def _apply_filter(self) -> None:
         needle = self._search.text().strip().lower()
         for r in range(self.table.rowCount()):
-            pid = (self.table.item(r, self.COL_PLUGIN_ID).text() if self.table.item(r, self.COL_PLUGIN_ID) else "").lower()
-            name = (self.table.item(r, self.COL_NAME).text() if self.table.item(r, self.COL_NAME) else "").lower()
-            pkg = (self.table.item(r, self.COL_PACKAGE).text() if self.table.item(r, self.COL_PACKAGE) else "").lower()
+            pid = (
+                self.table.item(r, self.COL_PLUGIN_ID).text()
+                if self.table.item(r, self.COL_PLUGIN_ID)
+                else ""
+            ).lower()
+            name = (
+                self.table.item(r, self.COL_NAME).text()
+                if self.table.item(r, self.COL_NAME)
+                else ""
+            ).lower()
+            pkg = (
+                self.table.item(r, self.COL_PACKAGE).text()
+                if self.table.item(r, self.COL_PACKAGE)
+                else ""
+            ).lower()
             show = not needle or (needle in pid or needle in name or needle in pkg)
             self.table.setRowHidden(r, not show)
 
@@ -296,7 +311,10 @@ class PluginsDialog(QDialog):
             return
 
         if action == "Uninstall":
-            if QMessageBox.question(self, "Uninstall", f"Uninstall {pkg}?") != QMessageBox.StandardButton.Yes:
+            if (
+                QMessageBox.question(self, "Uninstall", f"Uninstall {pkg}?")
+                != QMessageBox.StandardButton.Yes
+            ):
                 return
             self._run_pip(f"Uninstalling {pkg}…", lambda: self._pip.uninstall(pkg))
             return
@@ -344,7 +362,7 @@ class PluginsDialog(QDialog):
                     pass
 
         # Connect signals for THIS run
-        self._pip.output.connect(on_output)      # type: ignore[attr-defined]
+        self._pip.output.connect(on_output)  # type: ignore[attr-defined]
         self._pip.finished.connect(on_finished)  # type: ignore[attr-defined]
 
         dlg.btn_cancel.clicked.connect(lambda: self._pip.cancel())

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib.metadata import entry_points, version
-from typing import Iterable
 
 from pymd.plugins import ENTRYPOINT_GROUP
 
@@ -16,7 +16,11 @@ class DiscoveredPlugin:
 
 def discover_plugins() -> Iterable[DiscoveredPlugin]:
     eps = entry_points()
-    group_eps = eps.select(group=ENTRYPOINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRYPOINT_GROUP, [])
+    group_eps = (
+        eps.select(group=ENTRYPOINT_GROUP)
+        if hasattr(eps, "select")
+        else eps.get(ENTRYPOINT_GROUP, [])
+    )
     for ep in group_eps:
         dist_ver: str | None = None
         try:

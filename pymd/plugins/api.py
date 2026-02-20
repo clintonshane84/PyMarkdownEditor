@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol, Sequence, runtime_checkable, Literal
+from typing import Literal, Protocol, runtime_checkable
 
 # -----------------------------------------------------------------------------
 # Plugin API versioning
@@ -18,6 +19,7 @@ ENTRYPOINT_GROUP = "pymarkdowneditor.plugins"
 # Core metadata + action specs
 # -----------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PluginMeta:
     """
@@ -29,9 +31,10 @@ class PluginMeta:
       - `requires_app` and `requires_plugin_api` are version range strings
         (semver-like). The host may choose to validate strictly or loosely.
     """
-    id: str                      # e.g. "org.pymd.spellcheck"
-    name: str                    # Human-friendly display name
-    version: str                 # Plugin package version (semver recommended)
+
+    id: str  # e.g. "org.pymd.spellcheck"
+    name: str  # Human-friendly display name
+    version: str  # Plugin package version (semver recommended)
     description: str = ""
     author: str = ""
     homepage: str = ""
@@ -53,17 +56,19 @@ class ActionSpec:
       - `menu` is a suggested placement; the host may re-home actions.
       - `toolbar=True` is only a hint; host may ignore.
     """
-    id: str                      # e.g. "org.pymd.spellcheck.toggle"
-    title: str                   # UI label
-    menu: str | MenuName         # e.g. "Tools", "Edit", "Export"
-    shortcut: Optional[str] = None
-    status_tip: Optional[str] = None
+
+    id: str  # e.g. "org.pymd.spellcheck.toggle"
+    title: str  # UI label
+    menu: str | MenuName  # e.g. "Tools", "Edit", "Export"
+    shortcut: str | None = None
+    status_tip: str | None = None
     toolbar: bool = False
 
 
 # -----------------------------------------------------------------------------
 # Host -> Plugin stable API (no Qt types)
 # -----------------------------------------------------------------------------
+
 
 class IAppAPI(Protocol):
     """
@@ -127,6 +132,7 @@ class IAppAPI(Protocol):
 # Plugin contract
 # -----------------------------------------------------------------------------
 
+
 @runtime_checkable
 class IPlugin(Protocol):
     """
@@ -187,6 +193,7 @@ class IPlugin(Protocol):
 # Optional: convenience base class plugin authors can inherit from
 # -----------------------------------------------------------------------------
 
+
 class BasePlugin:
     """
     Optional convenience base class that implements no-op lifecycle and extensions.
@@ -201,7 +208,9 @@ class BasePlugin:
     def deactivate(self) -> None:  # pragma: no cover
         pass
 
-    def register_actions(self) -> Sequence[tuple[ActionSpec, Callable[[IAppAPI], None]]]:  # pragma: no cover
+    def register_actions(
+        self,
+    ) -> Sequence[tuple[ActionSpec, Callable[[IAppAPI], None]]]:  # pragma: no cover
         return ()
 
     def register_exporters(self) -> Sequence[object]:  # pragma: no cover

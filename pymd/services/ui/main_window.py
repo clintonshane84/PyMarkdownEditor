@@ -1,36 +1,24 @@
 from __future__ import annotations
 
-import sys
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
 
-from PyQt6.QtCore import QByteArray, Qt, QProcess, QTimer
+from PyQt6.QtCore import QByteArray, Qt
 from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
-    QCheckBox,
-    QDialog,
     QFileDialog,
-    QHBoxLayout,
-    QHeaderView,
     QInputDialog,
-    QLabel,
-    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
-    QProgressDialog,
-    QPushButton,
     QSplitter,
     QStatusBar,
-    QTableWidget,
-    QTableWidgetItem,
     QTextBrowser,
     QTextEdit,
     QToolBar,
-    QVBoxLayout,
-    QWidget,
 )
 
 from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
@@ -77,7 +65,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     Stable capabilities exposed to plugins. This is the only place that touches Qt.
     """
 
-    def __init__(self, window: "MainWindow") -> None:
+    def __init__(self, window: MainWindow) -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -206,7 +194,9 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
+    def attach_plugins(
+        self, *, plugin_manager: object | None, plugin_installer: object | None
+    ) -> None:
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
         self._rebuild_plugin_actions()
@@ -223,12 +213,22 @@ class MainWindow(QMainWindow):
         self.act_plugins = QAction("&Plugins…", self, triggered=self._show_plugins_manager)
 
         # File actions
-        self.act_new = QAction("New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file)
-        self.act_open = QAction("Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog)
-        self.act_save = QAction("Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save)
-        self.act_save_as = QAction("Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as)
+        self.act_new = QAction(
+            "New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file
+        )
+        self.act_open = QAction(
+            "Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog
+        )
+        self.act_save = QAction(
+            "Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save
+        )
+        self.act_save_as = QAction(
+            "Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as
+        )
 
-        self.act_toggle_wrap = QAction("Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap)
+        self.act_toggle_wrap = QAction(
+            "Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap
+        )
         self.act_toggle_preview = QAction(
             "Toggle Preview", self, checkable=True, checked=True, triggered=self._toggle_preview
         )
@@ -236,7 +236,9 @@ class MainWindow(QMainWindow):
         # Export actions from registry
         self.export_actions: list[QAction] = []
         for exporter in self._exporters.all():
-            act = QAction(exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e))
+            act = QAction(
+                exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e)
+            )
             self.export_actions.append(act)
 
         self.recent_menu = QMenu("Open Recent", self)
@@ -251,7 +253,9 @@ class MainWindow(QMainWindow):
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
         self.act_img = QAction("Image", self, triggered=self._select_image)
         self.act_link = QAction("Link", self, triggered=self._create_link)
-        self.act_table = QAction("Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table)
+        self.act_table = QAction(
+            "Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table
+        )
 
         # Find/Replace actions with standard shortcuts
         self.act_find = QAction("Find", self)
@@ -491,7 +495,19 @@ class MainWindow(QMainWindow):
         self.editor.setTextCursor(c)
 
     def _insert_code_block(self) -> None:
-        languages = ["", "php", "javascript", "typescript", "java", "c", "cpp", "csharp", "python", "ruby", "scala"]
+        languages = [
+            "",
+            "php",
+            "javascript",
+            "typescript",
+            "java",
+            "c",
+            "cpp",
+            "csharp",
+            "python",
+            "ruby",
+            "scala",
+        ]
 
         lang, ok = QInputDialog.getItem(
             self, "Code block language", "Select language (optional):", languages, 0, False
@@ -635,7 +651,9 @@ class MainWindow(QMainWindow):
             exporter.export(html, Path(out_str))
             self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}")
+            QMessageBox.critical(
+                self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
+            )
 
     def _toggle_wrap(self, on: bool) -> None:
         mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
@@ -682,11 +700,11 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- DnD -----------------------------
 
-    def dragEnterEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
+    def dragEnterEvent(self, e: Any) -> None:
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
-    def dropEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
+    def dropEvent(self, e: Any) -> None:
         urls = e.mimeData().urls()
         if not urls:
             return
@@ -696,7 +714,7 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Close -----------------------------
 
-    def closeEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
+    def closeEvent(self, event: Any) -> None:
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)

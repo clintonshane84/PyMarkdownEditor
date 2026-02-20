@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 from PyQt6.QtCore import QObject, QProcess, pyqtSignal
 
@@ -27,8 +27,8 @@ class QtPipInstaller(QObject):
     Emits streaming output for a progress dialog.
     """
 
-    output = pyqtSignal(str)           # combined stdout/stderr lines
-    finished = pyqtSignal(object)      # PipResult
+    output = pyqtSignal(str)  # combined stdout/stderr lines
+    finished = pyqtSignal(object)  # PipResult
 
     def __init__(self) -> None:
         super().__init__()

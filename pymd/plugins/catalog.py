@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 
 @dataclass(frozen=True)
 class PluginCatalogItem:
-    plugin_id: str                 # matches plugin.meta.id once installed
+    plugin_id: str  # matches plugin.meta.id once installed
     name: str
-    pip_package: str               # e.g. "pymd-plugin-uppercase"
+    pip_package: str  # e.g. "pymd-plugin-uppercase"
     description: str = ""
     homepage: str = ""
 
