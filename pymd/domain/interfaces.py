@@ -23,6 +23,7 @@ class IFileService(Protocol):
 class ISettingsService(Protocol):
     """Persist and retrieve lightweight UI state."""
 
+    # Window/layout state
     def get_geometry(self) -> bytes | None: ...
 
     def set_geometry(self, blob: bytes) -> None: ...
@@ -31,9 +32,15 @@ class ISettingsService(Protocol):
 
     def set_splitter(self, blob: bytes) -> None: ...
 
+    # Recent files
     def get_recent(self) -> list[str]: ...
 
     def set_recent(self, recent: Iterable[str]) -> None: ...
+
+    # Generic key/value (used by plugins state store etc.)
+    def get_raw(self, key: str, default: str | None = None) -> str | None: ...
+
+    def set_raw(self, key: str, value: str) -> None: ...
 
 
 class IExporter(ABC):
