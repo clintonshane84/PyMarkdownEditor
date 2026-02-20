@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from PyQt6.QtCore import QByteArray, Qt
 from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
@@ -37,35 +35,15 @@ except Exception:  # pragma: no cover
     IAppAPI = object  # type: ignore[misc]
 
 
-# ----------------------------- Plugin UI models -----------------------------
-
-
-@dataclass(frozen=True)
-class PluginRow:
-    """
-    Minimal plugin row model for the UI.
-
-    plugin_id: stable plugin identifier (entry-point id / meta.id)
-    package: pip package name to install/uninstall
-    """
-
-    plugin_id: str
-    name: str
-    version: str
-    package: str
-    enabled: bool
-    description: str = ""
-
-
-# --------------------------- App API (for plugins) ---------------------------
-
-
 class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     """
     Stable capabilities exposed to plugins. This is the only place that touches Qt.
+
+    NOTE: We intentionally use ISettingsService.get_raw/set_raw to avoid poking into
+    SettingsService internals (keeps mypy/ruff happy).
     """
 
-    def __init__(self, window: MainWindow) -> None:
+    def __init__(self, window: "MainWindow") -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -92,36 +70,28 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
         exporter = self._w._exporters.get(exporter_id)
         self._w._export_with(exporter)
 
-    # ---- plugin settings (namespaced; best effort) ----
+    # ---- plugin settings (namespaced) ----
     def get_plugin_setting(
-        self, plugin_id: str, key: str, default: str | None = None
+            self, plugin_id: str, key: str, default: str | None = None
     ) -> str | None:
-        # If SettingsService wraps QSettings, it typically holds it as `_s`.
-        s = getattr(self._w.settings, "_s", None)
-        if s is None:
-            return default
-        v = s.value(f"plugins/{plugin_id}/{key}", default)
-        return None if v is None else str(v)
+        return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
     def set_plugin_setting(self, plugin_id: str, key: str, value: str) -> None:
-        s = getattr(self._w.settings, "_s", None)
-        if s is None:
-            return
-        s.setValue(f"plugins/{plugin_id}/{key}", value)
+        self._w.settings.set_raw(f"plugins/{plugin_id}/{key}", value)
 
 
 class MainWindow(QMainWindow):
     """Thin PyQt window that delegates work to injected services (DIP)."""
 
     def __init__(
-        self,
-        renderer: IMarkdownRenderer,
-        file_service: IFileService,
-        settings: ISettingsService,
-        *,
-        exporter_registry: IExporterRegistry | None = None,
-        start_path: Path | None = None,
-        app_title: str = "PyMarkdownEditor",
+            self,
+            renderer: IMarkdownRenderer,
+            file_service: IFileService,
+            settings: ISettingsService,
+            *,
+            exporter_registry: IExporterRegistry | None = None,
+            start_path: Path | None = None,
+            app_title: str = "PyMarkdownEditor",
     ) -> None:
         super().__init__()
         self.setWindowTitle(app_title)
@@ -194,9 +164,7 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(
-        self, *, plugin_manager: object | None, plugin_installer: object | None
-    ) -> None:
+    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
         self._rebuild_plugin_actions()
@@ -237,7 +205,9 @@ class MainWindow(QMainWindow):
         self.export_actions: list[QAction] = []
         for exporter in self._exporters.all():
             act = QAction(
-                exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e)
+                exporter.label,
+                self,
+                triggered=lambda chk=False, e=exporter: self._export_with(e),
             )
             self.export_actions.append(act)
 
@@ -293,16 +263,16 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_toggle_preview)
 
         for a in (
-            self.act_bold,
-            self.act_italic,
-            self.act_code,
-            self.act_code_block,
-            self.act_h1,
-            self.act_h2,
-            self.act_list,
-            self.act_img,
-            self.act_link,
-            self.act_table,
+                self.act_bold,
+                self.act_italic,
+                self.act_code,
+                self.act_code_block,
+                self.act_h1,
+                self.act_h2,
+                self.act_list,
+                self.act_img,
+                self.act_link,
+                self.act_table,
         ):
             tbf.addAction(a)
 
@@ -328,14 +298,14 @@ class MainWindow(QMainWindow):
 
         editm = m.addMenu("&Edit")
         for a in (
-            self.act_bold,
-            self.act_italic,
-            self.act_code,
-            self.act_code_block,
-            self.act_h1,
-            self.act_h2,
-            self.act_list,
-            self.act_table,
+                self.act_bold,
+                self.act_italic,
+                self.act_code,
+                self.act_code_block,
+                self.act_h1,
+                self.act_h2,
+                self.act_list,
+                self.act_table,
         ):
             editm.addAction(a)
         editm.addSeparator()
@@ -366,12 +336,24 @@ class MainWindow(QMainWindow):
     # ----------------------------- Plugins UI -----------------------------
 
     def _show_plugins_manager(self) -> None:
+        # Plugins UI is optional; show a clear message if missing wiring.
+        if self.plugin_manager is None or self.plugin_installer is None:
+            QMessageBox.information(
+                self,
+                "Plugins",
+                "Plugin management is not available in this build.",
+            )
+            return
+
         if self._plugins_dialog is None:
             self._plugins_dialog = PluginsDialog(
-                self,
-                plugin_manager=self.plugin_manager,
-                plugin_installer=self.plugin_installer,
-                on_changed=self._on_plugins_changed,
+                parent=self,
+                # PluginsDialog expects these DI-provided collaborators:
+                state=self.plugin_manager.state_store,  # type: ignore[attr-defined]
+                pip=self.plugin_installer,  # QtPipInstaller implements the right signals
+                get_installed=self.plugin_manager.get_installed_rows,  # type: ignore[attr-defined]
+                reload_plugins=self.plugin_manager.reload,  # type: ignore[attr-defined]
+                catalog=getattr(self.plugin_manager, "catalog", None),  # type: ignore[attr-defined]
             )
         self._plugins_dialog.show()
         self._plugins_dialog.raise_()
@@ -649,7 +631,9 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
+            self.statusBar().showMessage(
+                f"Exported {exporter.name.upper()}: {out_str}", 3000
+            )
         except Exception as e:
             QMessageBox.critical(
                 self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
@@ -700,11 +684,11 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- DnD -----------------------------
 
-    def dragEnterEvent(self, e: Any) -> None:
+    def dragEnterEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
-    def dropEvent(self, e: Any) -> None:
+    def dropEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
         urls = e.mimeData().urls()
         if not urls:
             return
@@ -714,7 +698,7 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Close -----------------------------
 
-    def closeEvent(self, event: Any) -> None:
+    def closeEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)
