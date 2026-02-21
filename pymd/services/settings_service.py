@@ -32,5 +32,11 @@ class SettingsService(ISettingsService):
         v = self._s.value(SETTINGS_RECENTS, [])
         return [str(x) for x in v] if isinstance(v, list) else []
 
+    def get_raw(self, key: str, default=None):
+        return self._s.value(key, default)
+
+    def set_raw(self, key: str, value) -> None:
+        self._s.setValue(key, value)
+
     def set_recent(self, recent: Iterable[str]) -> None:
         self._s.setValue(SETTINGS_RECENTS, list(recent))

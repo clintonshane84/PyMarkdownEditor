@@ -8,16 +8,15 @@ from pymd.domain.interfaces import (
     IMarkdownRenderer,
     ISettingsService,
 )
+from pymd.plugins.manager import PluginManager
+from pymd.plugins.pip_installer import QtPipInstaller
+from pymd.plugins.state import SettingsPluginStateStore
 from pymd.services.exporters import WebEnginePdfExporter
-
-# Exporter registry: **singleton instance** (do NOT call it)
 from pymd.services.exporters.base import ExporterRegistryInst
 from pymd.services.exporters.html_exporter import HtmlExporter
 from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
-
-# Thin Qt window
 from pymd.services.ui.main_window import MainWindow
 
 # Optional adapters & presenter (keep optional to avoid hard failures in lean builds)
@@ -35,10 +34,12 @@ except Exception:  # pragma: no cover
 
 class Container:
     """
-    Lightweight DI container:
-      - Wires default services if not provided.
-      - Ensures built-in exporters (html, pdf) are registered on the singleton registry.
-      - Optionally wires presenter/adapters if present.
+    Lightweight DI container.
+
+    Key guarantees:
+      - Plugin manager + installer are always created and attached to MainWindow consistently.
+      - Container is responsible for *attachment* (refs + API binding), NOT activation.
+      - Activation/reload is owned by the bootstrapper (deterministic boot sequence).
     """
 
     def __init__(
@@ -57,26 +58,25 @@ class Container:
             qsettings or QSettings()
         )
 
-        # Exporter registry **singleton instance**
+        # Exporter registry instance (per-instance; test-friendly)
         self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
-
-        # Ensure built-ins are present on the same instance the tests will read
         self._ensure_builtin_exporters(self.exporter_registry)
+
+        # Plugins (always available in the container)
+        self.plugin_state = SettingsPluginStateStore(settings=self.settings_service)
+        self.plugin_installer = QtPipInstaller()
+        self.plugin_manager = PluginManager(state=self.plugin_state)
 
         # Optional UI ports
         self.dialogs = (
             dialogs
             if dialogs is not None
-            else (
-                QtFileDialogService() if QtFileDialogService is not None else None  # type: ignore[call-arg]
-            )
+            else (QtFileDialogService() if QtFileDialogService is not None else None)  # type: ignore[call-arg]
         )
         self.messages = (
             messages
             if messages is not None
-            else (
-                QtMessageService() if QtMessageService is not None else None  # type: ignore[call-arg]
-            )
+            else (QtMessageService() if QtMessageService is not None else None)  # type: ignore[call-arg]
         )
 
     # ---------- Class helper (compat with prior API) ----------
@@ -97,6 +97,7 @@ class Container:
     def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry | None) -> None:
         if exporter_registry is None:
             exporter_registry = ExporterRegistryInst()
+
         # html
         try:
             exporter_registry.get("html")
@@ -108,6 +109,33 @@ class Container:
             exporter_registry.get("pdf")
         except KeyError:
             exporter_registry.register(WebEnginePdfExporter())
+
+    def _attach_plugins_to_window(self, window: MainWindow) -> None:
+        """
+        Consistent plugin wiring point.
+
+        Responsibilities:
+          - Bind the window-created AppAPI to the plugin manager (set_api)
+          - Attach plugin manager + installer refs to the window
+
+        Non-responsibilities:
+          - DO NOT call plugin_manager.reload() here (bootstrapper owns activation).
+        """
+        try:
+            api = getattr(window, "_app_api", None)
+            if api is not None and hasattr(self.plugin_manager, "set_api"):
+                self.plugin_manager.set_api(api)  # type: ignore[arg-type]
+        except Exception:
+            pass
+
+        try:
+            if hasattr(window, "attach_plugins"):
+                window.attach_plugins(
+                    plugin_manager=self.plugin_manager,
+                    plugin_installer=self.plugin_installer,
+                )
+        except Exception:
+            pass
 
     # ---------- UI factories ----------
 
@@ -135,7 +163,11 @@ class Container:
         app_title: str = "PyMarkdownEditor",
     ) -> MainWindow:
         """
-        Create the Qt MainWindow, wire services, and (optionally) attach a presenter.
+        Create the Qt MainWindow, wire services, plugins, and (optionally) attach a presenter.
+
+        NOTE:
+          - Plugin activation happens in AppBootstrapper.boot() (container.plugin_manager.reload()).
+          - This function only guarantees attachment + API binding.
         """
         window = MainWindow(
             renderer=self.renderer,
@@ -145,6 +177,9 @@ class Container:
             start_path=start_path,
             app_title=app_title,
         )
+
+        # --- Plugins wiring (consistent + deterministic) ---
+        self._attach_plugins_to_window(window)
 
         # Attach presenter if available
         try:

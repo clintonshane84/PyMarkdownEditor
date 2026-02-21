@@ -6,7 +6,7 @@ import pytest
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMessageBox, QTextBrowser, QTextEdit
 
-from pymd.domain.interfaces import IExporter, IExporterRegistry
+from pymd.services.exporters.base import IExporter, IExporterRegistry
 from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
