@@ -87,7 +87,7 @@ class Container:
         *,
         organization: str = "PyMarkdownEditor",
         application: str = "PyMarkdownEditor",
-    ) -> "Container":
+    ) -> Container:
         if qsettings is None:
             qsettings = QSettings(organization, application)
         return Container(qsettings=qsettings)

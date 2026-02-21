@@ -1,8 +1,6 @@
 # tests/test_container.py
 from __future__ import annotations
 
-from typing import Any
-
 from pymd.di.container import Container
 
 
@@ -29,8 +27,9 @@ def test_container_wires_services_exporters_and_plugins(qapp, qsettings):
     assert c.plugin_manager.state_store is c.plugin_state
 
 
-def test_container_build_main_window_attaches_plugin_manager_and_installer_but_does_not_reload(qapp, qsettings,
-                                                                                               monkeypatch):
+def test_container_build_main_window_attaches_plugin_manager_and_installer_but_does_not_reload(
+        qapp, qsettings, monkeypatch
+):
     """
     Ownership rule: bootstrapper owns plugin_manager.reload().
 
@@ -43,7 +42,9 @@ def test_container_build_main_window_attaches_plugin_manager_and_installer_but_d
 
     # Fail fast if Container tries to reload during build_main_window()
     def boom_reload() -> None:
-        raise AssertionError("Container must not call plugin_manager.reload(); bootstrapper owns reload.")
+        raise AssertionError(
+            "Container must not call plugin_manager.reload(); bootstrapper owns reload."
+        )
 
     monkeypatch.setattr(c.plugin_manager, "reload", boom_reload, raising=True)
 

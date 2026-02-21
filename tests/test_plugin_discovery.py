@@ -6,7 +6,6 @@ from typing import Any
 
 import pymd.plugins.discovery as discovery_mod
 
-
 # ----------------------------
 # Fakes
 # ----------------------------

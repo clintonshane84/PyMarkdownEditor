@@ -190,13 +190,23 @@ class PluginsDialog(QDialog):
             # uninstall allowed if we can map to a package (either from row or catalog)
             can_uninstall = bool(pkg) or bool(self._pip_package_for(p.plugin_id))
             action = "Uninstall" if can_uninstall else "—"
-            rows.append((p.plugin_id, p.name, p.version, p.description, pkg, self.SOURCE_INSTALLED, action))
+            rows.append(
+                (p.plugin_id, p.name, p.version, p.description, pkg, self.SOURCE_INSTALLED, action)
+            )
 
         # catalog plugins not installed
         for c in self._catalog:
             if c.plugin_id not in installed_by_id:
                 rows.append(
-                    (c.plugin_id, c.name, "", c.description, c.pip_package, self.SOURCE_CATALOG, "Install")
+                    (
+                        c.plugin_id,
+                        c.name,
+                        "",
+                        c.description,
+                        c.pip_package,
+                        self.SOURCE_CATALOG,
+                        "Install",
+                    )
                 )
 
         rows.sort(key=lambda x: (x[5] != self.SOURCE_INSTALLED, x[1].lower(), x[0].lower()))
@@ -215,7 +225,9 @@ class PluginsDialog(QDialog):
                 enabled_item.setData(self.ROLE_PACKAGE, pkg)
 
                 if is_installed:
-                    enabled_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
+                    enabled_item.setFlags(
+                        Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
+                    )
                     enabled_item.setCheckState(
                         Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
                     )
@@ -237,7 +249,9 @@ class PluginsDialog(QDialog):
 
                 btn = QPushButton(action, self)
                 btn.setEnabled(action in ("Install", "Uninstall"))
-                btn.clicked.connect(lambda _=False, xpid=pid, xaction=action: self._on_action(xpid, xaction))
+                btn.clicked.connect(
+                    lambda _=False, xpid=pid, xaction=action: self._on_action(xpid, xaction)
+                )
                 self.table.setCellWidget(r, self.COL_ACTION, btn)
         finally:
             self.table.blockSignals(False)
@@ -248,9 +262,20 @@ class PluginsDialog(QDialog):
         needle = self._search.text().strip().lower()
         for r in range(self.table.rowCount()):
             pid = (
-                self.table.item(r, self.COL_PLUGIN_ID).text() if self.table.item(r, self.COL_PLUGIN_ID) else "").lower()
-            name = (self.table.item(r, self.COL_NAME).text() if self.table.item(r, self.COL_NAME) else "").lower()
-            pkg = (self.table.item(r, self.COL_PACKAGE).text() if self.table.item(r, self.COL_PACKAGE) else "").lower()
+                self.table.item(r, self.COL_PLUGIN_ID).text()
+                if self.table.item(r, self.COL_PLUGIN_ID)
+                else ""
+            ).lower()
+            name = (
+                self.table.item(r, self.COL_NAME).text()
+                if self.table.item(r, self.COL_NAME)
+                else ""
+            ).lower()
+            pkg = (
+                self.table.item(r, self.COL_PACKAGE).text()
+                if self.table.item(r, self.COL_PACKAGE)
+                else ""
+            ).lower()
 
             show = not needle or (needle in pid or needle in name or needle in pkg)
             self.table.setRowHidden(r, not show)

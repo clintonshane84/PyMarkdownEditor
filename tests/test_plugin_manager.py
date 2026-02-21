@@ -7,7 +7,6 @@ from typing import Any
 import pymd.plugins.manager as manager_mod
 from pymd.plugins.manager import PluginManager
 
-
 # ------------------------------
 # Test doubles
 # ------------------------------
@@ -39,6 +38,7 @@ class _StateStore:
 
 class _Api:
     """Minimal IAppAPI double."""
+
     pass
 
 
