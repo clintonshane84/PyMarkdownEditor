@@ -1,61 +1,141 @@
 # PyMarkdownEditor
 
-A fast, minimal **PyQt6** Markdown editor with live preview, HTML/PDF export, and a clean, SOLID-friendly architecture.  
-Owner-led governance; contributions welcome (see [CONTRIBUTING](CONTRIBUTING.md)).
+A fast, minimal **PyQt6 Markdown editor** with live preview, HTML/PDF export, and a clean, SOLID-friendly architecture.
 
-[![CI](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/ci.yml)
-[![Build & Release Binaries](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/release-binaries.yml/badge.svg)](https://github.com/clintonshane84/PyMarkdownEditor/actions/workflows/release-binaries.yml)
+Designed to stay small, deterministic, and easy to package.
 
-![PyMarkdownEditor](docs/screenshot.png)
+Owner-led governance; contributions welcome (see CONTRIBUTING).
 
 ---
 
-## Features
+## 🚀 Features
 
-- **Live preview**  
-  Debounced, side-by-side Markdown preview while you type.
+### 📝 Live Preview
 
-- **Markdown rendering**  
-  Uses `python-markdown` with common extensions:
-  `extra`, `fenced_code`, `codehilite`, `toc`, `sane_lists`, `smarty`, and supports extra extensions such as `pymdown-extensions` (e.g. math/LaTeX via `arithmatex`).
+* Debounced, side-by-side Markdown preview while you type.
+* Dark-mode friendly CSS.
+* Optional Qt WebEngine rendering (automatically disabled in tests/headless runs).
 
-- **Dark-mode aware CSS**  
-  Preview uses theme-friendly styles that work in both light and dark environments.
+### 🧠 Markdown Rendering
 
-- **Robust file handling**
-  - Open/Save `.md` with **atomic** writes (`QSaveFile`, UTF-8).
-  - **Recent files** persisted via `QSettings`.
-  - **Drag & drop** files onto the window to open them.
+Powered by:
 
-- **Exporters**
-  - **HTML** – saves the preview HTML as-is.
-  - **PDF (classic)** – QTextDocument/QPrinter (A4, 12.7 mm margins) to mirror the preview.
-  - **PDF (WebEngine)** – optional QWebEngine-based exporter (`web_pdf_exporter.py`) for closer “what you see is what you print” output when Qt WebEngine is available.
+* `python-markdown`
+* Extensions:
 
-- **Editor helpers**
-  - One-click **bold**, *italic*, `` `inline code` ``.
-  - Heading helpers: `# H1`, `## H2`.
-  - List helper: `- list`.
-  - **Insert link** dialog.
-  - **Insert image** dialog.
-  - **Insert table** dialog.
-  - **Find / Replace / Replace all** dialog.
-  - Toggle **wrap** and **preview** from toolbar/menu.
+    * `extra`
+    * `fenced_code`
+    * `codehilite`
+    * `toc`
+    * `sane_lists`
+    * `smarty`
+* Optional:
 
-- **Architecture**
-  - SOLID-leaning design with clear boundaries.
-  - Simple dependency injection container.
-  - Strategy-based exporters registered in an `ExporterRegistry` singleton.
-  - Thin Qt UI (`MainWindow` + dialogs) that delegates to services.
+    * `pymdown-extensions` (e.g. math/LaTeX via `arithmatex`)
+
+### 📁 Robust File Handling
+
+* Open/Save `.md` files
+* Atomic writes via `QSaveFile`
+* UTF-8 encoding
+* Drag & drop support
+* Recent files persisted via `QSettings`
 
 ---
 
-## Installation
+## 📤 Exporters
 
-### From source (current)
+Exporters are strategy-based and registered in an `ExporterRegistry`.
+
+### HTML
+
+Saves the preview HTML as-is.
+
+### PDF (Classic)
+
+Uses `QTextDocument` + `QPrinter` (A4, 12.7mm margins).
+
+### PDF (WebEngine – Optional)
+
+Uses `QWebEngineView` for closer WYSIWYG output.
+
+Automatically disabled in:
+
+* pytest
+* headless environments
+* when `PYMD_DISABLE_WEBENGINE=1`
+
+---
+
+## 🔌 Plugin System
+
+PyMarkdownEditor includes a **first-class plugin architecture**.
+
+### Discovery
+
+Plugins are discovered via:
+
+1. **Built-in plugins**
+2. **Python entry points**
+
+Discovery is deterministic.
+
+### Lifecycle Contract
+
+Recommended host wiring:
+
+```python
+plugin_manager.set_api(app_api)
+plugin_manager.reload()
+plugin_manager.on_app_ready()
+```
+
+Hooks (optional):
+
+* `on_load(api)` → runs once per process
+* `activate(api)` → runs when enabled
+* `on_ready(api)` → runs once per activation session
+* `deactivate()` → runs when disabled
+
+### Enable / Disable
+
+Plugin state is persisted via `IPluginStateStore`.
+
+Built-in plugins:
+
+* Appear in the Plugins UI
+* Can be enabled/disabled
+* Never crash discovery if missing
+
+---
+
+## 🧱 Architecture
+
+SOLID-leaning, layered design:
+
+* **Domain layer** (interfaces, models)
+* **Services layer** (rendering, exporters, plugins, config)
+* **UI layer** (thin Qt window + dialogs)
+* **Dependency injection container**
+* **Plugin lifecycle manager**
+
+### Key Principles
+
+* Clear boundaries
+* No UI in core
+* Strategy-based exporters
+* Explicit plugin lifecycle
+* Deterministic startup
+* Test-safe QtWebEngine behavior
+
+---
+
+## 📦 Installation
+
+### From Source
 
 ```bash
-# 1) Create and activate a virtual environment
+# 1) Create virtual environment
 python -m venv .venv
 
 # Windows
@@ -64,25 +144,25 @@ python -m venv .venv
 # macOS / Linux
 source .venv/bin/activate
 
-# 2) Install runtime dependencies
+# 2) Install dependencies
 pip install -r requirements.txt
 
-# 3) Run the app
+# 3) Run
 python -m pymd
-````
+```
 
-> **Python:** 3.10+ recommended.
+Python 3.10+ recommended.
 
-### From PyPI (planned / when published)
+---
 
-Once the package is live on PyPI under `py-markdown-editor`, installation will look like:
+### From PyPI (when published)
 
 ```bash
 pip install py-markdown-editor
 python -m pymd
 ```
 
-If you later add a console script entry point, this could become as simple as:
+Future console entry:
 
 ```bash
 pymd
@@ -90,192 +170,88 @@ pymd
 
 ---
 
-## Requirements
+## 📚 Requirements
 
-Runtime dependencies (see `requirements.txt` for exact versions):
+Runtime:
 
-```txt
-PyQt6>=6.6
-Markdown>=3.5
-Pygments>=2.17
-pymdown-extensions
+* `PyQt6>=6.6`
+* `Markdown>=3.5`
+* `Pygments>=2.17`
+* `pymdown-extensions`
+
+Optional (WebEngine PDF export):
+
+* `PyQt6-WebEngine`
+
+---
+
+## ⌨ Keyboard & UI
+
+### Core
+
+* New / Open / Save / Save As
+* Toggle wrap
+* Toggle preview
+* Quit
+
+### Formatting
+
+* **B** → Bold
+* *i* → Italic
+* `code`
+* `# H1`
+* `## H2`
+* `- list`
+
+### Insert
+
+* Insert link
+* Insert image
+* Insert table
+* Find / Replace
+* About dialog
+
+All actions exposed via toolbar + menus.
+
+---
+
+## 📁 Project Structure
+
 ```
-
-> For WebEngine-based PDF export, you may also need:
->
-> ```txt
-> PyQt6-WebEngine
-> ```
->
-> and the corresponding Qt WebEngine system libraries on your platform.
-
-Dev/test tools live in `dev-requirements.txt`—see **Testing**.
-
----
-
-## Keyboard Shortcuts & UI
-
-**Core actions**
-
-* **New / Open / Save / Save As** – standard platform shortcuts.
-* **Toggle wrap** – toolbar/menu.
-* **Toggle preview** – toolbar/menu.
-* **Quit** – standard platform shortcut.
-
-**Text & formatting**
-
-* Toolbar/menu helpers:
-
-  * `**B**` – bold.
-  * `*i*` – italic.
-  * `` `code` `` – inline code.
-  * `# H1`, `## H2` – heading prefixes.
-  * `- list` – bullet list prefix.
-
-**Insert / dialogs**
-
-* **Insert link…** – opens the link dialog.
-* **Insert image…** – opens a file chooser and inserts an image reference.
-* **Insert table…** – opens the table dialog to generate Markdown tables.
-* **About…** – opens the About dialog.
-
-**Find & replace**
-
-* **Find…** – open the find dialog.
-* **Replace…** – open find/replace dialog.
-* **Replace all** – replace all matches in the document.
-
-(Exact keyboard accelerators may vary slightly by platform/Qt style, but all are exposed via menus and toolbars.)
-
----
-
-## Project Structure
-
-High-level repo layout:
-
-```txt
 .
-├── build-requirements.txt
-├── CHANGELOG.md
-├── config/
-├── CONTRIBUTING.md
-├── dev-requirements.txt
-├── dist/
-├── docs/
-│   ├── CI.md
-│   ├── RELEASING.md
-│   └── screenshot.png
-├── LICENSE
-├── pyinstaller.spec
-├── PyMarkdownEditor.spec
-├── pyproject.toml
-├── README.md
-├── requirements.txt
-├── ruff.toml
+├── pymd/
+│   ├── app.py
+│   ├── di/
+│   │   └── container.py
+│   ├── plugins/
+│   │   ├── discovery.py
+│   │   ├── manager.py
+│   │   ├── state.py
+│   │   └── builtin/
+│   ├── services/
+│   │   ├── exporters/
+│   │   ├── file_service.py
+│   │   ├── markdown_renderer.py
+│   │   ├── settings_service.py
+│   │   └── ui/
+│   │       ├── main_window.py
+│   │       ├── dialogs
+│   │       ├── adapters
+│   │       ├── ports
+│   │       ├── presenters
+│   │       └── commands
+│   └── domain/
+│       ├── interfaces.py
+│       └── models.py
 ├── tests/
-│   ├── conftest.py
-│   ├── test_about_dialog.py
-│   ├── test_container.py
-│   ├── test_exporter_registry.py
-│   ├── test_file_service.py
-│   ├── test_html_exporter.py
-│   ├── test_ini_config_service.py
-│   ├── test_main_window.py
-│   ├── test_markdown_renderer.py
-│   ├── test_models.py
-│   ├── test_pdf_exporter.py
-│   ├── test_settings_service.py
-│   └── test_table_dialog.py
-└── pymd/
-    ├── __init__.py
-    ├── __main__.py        # python -m pymd entry point
-    ├── main.py            # legacy/alt entry point
-    ├── app.py             # QApplication bootstrap + DI container wiring
-    ├── di/
-    │   ├── __init__.py
-    │   └── container.py
-    ├── domain/
-    │   ├── __init__.py
-    │   ├── interfaces.py
-    │   └── models.py
-    ├── services/
-    │   ├── __init__.py
-    │   ├── config/
-    │   │   └── ini_config_service.py
-    │   ├── exporters/
-    │   │   ├── __init__.py
-    │   │   ├── base.py
-    │   │   ├── html_exporter.py
-    │   │   ├── pdf_exporter.py
-    │   │   └── web_pdf_exporter.py
-    │   ├── file_service.py
-    │   ├── markdown_renderer.py
-    │   ├── settings_service.py
-    │   └── ui/
-    │       ├── __init__.py
-    │       ├── about.py
-    │       ├── create_link.py
-    │       ├── find_replace.py
-    │       ├── main_window.py
-    │       ├── table_dialog.py
-    │       ├── adapters/
-    │       │   ├── __init__.py
-    │       │   ├── qt_dialogs.py
-    │       │   ├── qt_messages.py
-    │       │   └── qt_text_editor.py
-    │       ├── commands/
-    │       │   ├── __init__.py
-    │       │   ├── prefix_lines.py
-    │       │   └── surround_selection.py
-    │       ├── ports/
-    │       │   ├── __init__.py
-    │       │   ├── dialogs.py
-    │       │   └── messages.py
-    │       └── presenters/
-    │           ├── __init__.py
-    │           └── main_presenter.py
-    └── utils/
-        ├── __init__.py
-        └── constants.py
+├── pyproject.toml
+├── requirements.txt
+└── README.md
 ```
-
-**Key pieces:**
-
-* **`pymd/app.py`**
-  Application bootstrap – sets up Qt app, DI container, and main window.
-
-* **`pymd/di/container.py`**
-  Wires services, exporters, and UI into a single container.
-
-* **`pymd/domain/`**
-  Core interfaces and models (keeps contracts decoupled from Qt/UI details).
-
-* **`pymd/services/`**
-
-  * `markdown_renderer.py` – wraps Markdown + extensions.
-  * `file_service.py` – safe file IO with atomic writes.
-  * `settings_service.py` / `config/ini_config_service.py` – settings and INI-based config.
-  * `exporters/` – HTML/PDF/Web PDF exporters behind a common base.
-
-* **`pymd/services/ui/`**
-
-  * `main_window.py` – main editor window.
-  * `about.py` – About dialog.
-  * `create_link.py`, `find_replace.py`, `table_dialog.py` – feature dialogs.
-  * `adapters/` – Qt-specific implementations of dialog, message, and text editor ports.
-  * `ports/` – abstraction interfaces for dialogs/messages (for testability and decoupling).
-  * `presenters/` – presenter layer (e.g. `main_presenter.py`) coordinating UI + services.
-  * `commands/` – small text-editing “command” helpers (e.g. prefix lines, surround selection).
-
-* **`pymd/utils/`**
-  Small shared constants and helpers.
-
-* **`tests/`**
-  Coverage for container wiring, dialogs, exporters, config service, and core services.
 
 ---
 
-## Testing
+## 🧪 Testing
 
 Install dev dependencies:
 
@@ -283,35 +259,27 @@ Install dev dependencies:
 pip install -r dev-requirements.txt
 ```
 
-Then run the test suite:
+Run:
 
 ```bash
 pytest --cov=pymd --cov-report=term-missing --timeout=120
 ```
 
-`dev-requirements.txt` includes (excerpt):
+Includes:
 
-```txt
-pytest>=8.0
-pytest-qt>=4.4
-pytest-cov>=5.0
-pytest-timeout
-ruff
-```
+* pytest
+* pytest-qt
+* pytest-cov
+* pytest-timeout
+* ruff
 
-Notes:
+### QtWebEngine Safety
 
-* Qt tests are written to avoid blocking modal dialogs.
-* Coverage includes both happy paths and error handling (e.g. file write failures, malformed config).
-* A fast “quick CI” config exists for non-`master` branches, and a fuller matrix runs for PRs to `master`.
+WebEngine is automatically disabled during pytest to prevent Chromium aborts.
 
 ---
 
-## Building Binaries (PyInstaller)
-
-You can bundle PyMarkdownEditor into standalone binaries using **PyInstaller**.
-
-A minimal local example:
+## 🏗 Building Binaries (PyInstaller)
 
 ```bash
 pip install pyinstaller
@@ -320,108 +288,93 @@ pyinstaller -n PyMarkdownEditor --windowed --onefile \
   -i NONE -s -y pymd/__main__.py
 ```
 
-The repository’s GitHub Actions workflow `.github/workflows/release-binaries.yml`:
+GitHub Actions:
 
-* Builds on **Windows**, **Linux**, and **macOS**.
-* Uses a `.spec` file on Windows for predictable layout.
-* Uses platform-appropriate commands on Linux/macOS (e.g. `.app` bundle on macOS).
-* Collects hidden imports for:
-
-  * `markdown`
-  * `pygments`
-  * `PyQt6` modules
-  * `pymdownx` (e.g. `arithmatex`).
-
-Artifacts are zipped or packaged per platform and attached to GitHub Releases for tagged versions (e.g. `v0.8.2`).
+* Windows / Linux / macOS builds
+* Hidden imports collected
+* Artifacts attached to tagged releases
 
 ---
 
-## CI, Releases & Publishing
+## 🔄 CI & Releases
 
-* **Continuous Integration** – `.github/workflows/ci.yml`
+### CI
 
-  * Runs on pushes/PRs.
-  * Performs `ruff` formatting checks and `pytest` with coverage.
-  * Uses a quick single-job run for development branches and a full OS/Python matrix for PRs to `master`.
+* Runs on push/PR
+* Ruff + pytest + coverage
+* Fast path for dev branches
+* Full OS matrix for master PRs
 
-* **Binary Releases** – `.github/workflows/release-binaries.yml`
+### Binary Releases
 
-  * Triggered by pushing a semver tag: `vMAJOR.MINOR.PATCH` (e.g. `v0.8.2`).
-  * Builds cross-platform binaries and uploads artifacts to the GitHub Release.
+Triggered by semver tag:
 
-* **PyPI / TestPyPI Publishing** – `.github/workflows/publish.yml`
+```
+vMAJOR.MINOR.PATCH
+```
 
-  * Triggered on tags like `v0.8.0`, `v0.8.1a1`, `v0.8.1-foo`.
-  * Verifies that the tag (e.g. `v0.8.2`) matches `project.version` in `pyproject.toml`.
-  * Builds sdist + wheel using `python -m build`.
-  * Uses **Trusted Publishing**:
+Builds cross-platform binaries and attaches to GitHub Release.
 
-    * Pre-release or hyphenated tags → **TestPyPI**.
-    * Final releases → **PyPI**.
+### PyPI Publishing
 
-See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
+Triggered by version tags.
 
----
-
-## Troubleshooting
-
-* **PDF export blank/empty**
-
-  * Ensure the target folder exists and is writable.
-  * Check that any required Qt print/WebEngine libraries are installed.
-
-* **Fonts differ between preview and PDF**
-
-  * QPrinter rasterization and platform fonts may differ.
-  * Consider tweaking the CSS or installing appropriate fonts system-wide.
-
-* **Qt / WebEngine errors**
-
-  * If using the WebEngine PDF exporter, make sure `PyQt6-WebEngine` and matching Qt WebEngine libraries are available.
-  * You can fall back to the classic QTextDocument/QPrinter exporter if needed.
-
-* **`ModuleNotFoundError: 'pymdownx'`**
-
-  * Install `pymdown-extensions`:
-
-    ```bash
-    pip install pymdown-extensions
-    ```
-  * Ensure it is present in your environment or packaged with your binary.
+* Pre-releases → TestPyPI
+* Final releases → PyPI
+* Version verified against `pyproject.toml`
 
 ---
 
-## Contributing
+## 🛠 Troubleshooting
 
-We welcome issues and pull requests.
+### PDF blank
 
-* [CONTRIBUTING.md](CONTRIBUTING.md) – owner-led governance, DCO sign-off, PR checklist.
-* [LICENSE](LICENSE) – Apache-2.0.
-* `.github/CODEOWNERS` (if present) – lists current code owners.
+* Ensure target folder writable
+* Verify Qt Print/WebEngine libraries installed
 
-“Owner-led governance” means:
+### WebEngine crashes
 
-* The maintainer steers overall scope and architecture.
-* The app aims to stay **small, focused, and easy to package**.
-* PRs are reviewed for fit, clarity, and maintainability before merging.
+* Ensure matching Qt libraries
+* Or disable:
 
-**Quick dev loop:**
+  ```
+  PYMD_DISABLE_WEBENGINE=1
+  ```
+
+### Missing pymdownx
+
+```
+pip install pymdown-extensions
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome issues and PRs.
+
+See:
+
+* CONTRIBUTING.md
+* LICENSE (Apache-2.0)
+
+Owner-led governance means:
+
+* Maintainer steers architecture
+* Small, focused scope
+* Clean, maintainable contributions
+
+### Dev loop
 
 ```bash
-# format / lint
-pip install ruff black
 ruff format .
 ruff check .
-
-# run tests
 pytest --cov=pymd --cov-report=term-missing --timeout=120
 ```
 
-You can wire these into pre-commit hooks for a smoother local workflow.
-
 ---
 
-## License
+## 📜 License
 
-Apache-2.0 © 2025 **clintonshane84**
-See [LICENSE](LICENSE).
+Apache-2.0 © 2025 clintonshane84
+See LICENSE.
