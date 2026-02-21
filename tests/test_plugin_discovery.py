@@ -17,11 +17,11 @@ class FakeDist:
 
 class FakeEntryPoint:
     def __init__(
-            self,
-            *,
-            name: str,
-            factory: object,
-            dist: FakeDist | None = None,
+        self,
+        *,
+        name: str,
+        factory: object,
+        dist: FakeDist | None = None,
     ) -> None:
         self.name = name
         self.dist = dist

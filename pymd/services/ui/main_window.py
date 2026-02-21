@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
     # ----------------------- Container hook for plugins -----------------------
 
     def attach_plugins(
-            self, *, plugin_manager: object | None, plugin_installer: object | None
+        self, *, plugin_manager: object | None, plugin_installer: object | None
     ) -> None:
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
@@ -365,7 +365,7 @@ class MainWindow(QMainWindow):
             return
 
         if not hasattr(self.plugin_manager, "state_store") or not hasattr(
-                self.plugin_manager, "reload"
+            self.plugin_manager, "reload"
         ):
             QMessageBox.information(
                 self,

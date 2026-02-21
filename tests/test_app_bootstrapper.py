@@ -44,11 +44,11 @@ class FakePluginManager:
 
 class FakeContainer:
     def __init__(
-            self,
-            *,
-            window: object | None = None,
-            plugin_manager: Any | None = None,
-            build_raises: bool = False,
+        self,
+        *,
+        window: object | None = None,
+        plugin_manager: Any | None = None,
+        build_raises: bool = False,
     ) -> None:
         self._window = window if window is not None else object()
         self._build_raises = build_raises
@@ -122,7 +122,7 @@ def test_boot_plugin_reload_failure_is_swallowed_and_still_finishes(monkeypatch)
 
 
 def test_boot_container_factory_failure_propagates_and_reports_up_to_loading_services(
-        monkeypatch,
+    monkeypatch,
 ) -> None:
     progress = FakeProgress()
     boot = AppBootstrapper(progress=progress, delay_ms=0)
@@ -140,7 +140,7 @@ def test_boot_container_factory_failure_propagates_and_reports_up_to_loading_ser
 
 
 def test_boot_build_main_window_failure_propagates_and_reports_up_to_building_interface(
-        monkeypatch,
+    monkeypatch,
 ) -> None:
     progress = FakeProgress()
     container = FakeContainer(build_raises=True)

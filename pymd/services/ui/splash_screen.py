@@ -18,7 +18,7 @@ class SplashScreen(QWidget):
     """
 
     def __init__(
-            self, *, image_path: Path | None = None, app_title: str = "PyMarkdownEditor"
+        self, *, image_path: Path | None = None, app_title: str = "PyMarkdownEditor"
     ) -> None:
         super().__init__(None, Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint)
 

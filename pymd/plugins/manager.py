@@ -45,11 +45,11 @@ class PluginManager:
     """
 
     def __init__(
-            self,
-            *,
-            state: IPluginStateStore,
-            api: IAppAPI | None = None,
-            catalog: Sequence[PluginCatalogItem] | None = None,
+        self,
+        *,
+        state: IPluginStateStore,
+        api: IAppAPI | None = None,
+        catalog: Sequence[PluginCatalogItem] | None = None,
     ) -> None:
         self._api: IAppAPI | None = api
         self._state: IPluginStateStore = state
@@ -147,7 +147,7 @@ class PluginManager:
     # ----------------------------- actions -----------------------------
 
     def iter_enabled_actions(
-            self, api: IAppAPI
+        self, api: IAppAPI
     ) -> Sequence[tuple[ActionSpec, AbcCallable[[IAppAPI], None]]]:
         """
         Returns (ActionSpec, handler) for enabled plugins only.
@@ -156,7 +156,7 @@ class PluginManager:
         return self._iter_actions(api=api, enabled_only=True)
 
     def iter_actions(
-            self, api: IAppAPI
+        self, api: IAppAPI
     ) -> Sequence[tuple[ActionSpec, AbcCallable[[IAppAPI], None]]]:
         """
         Returns (ActionSpec, handler) for all discovered plugins (enabled or not).
@@ -165,10 +165,10 @@ class PluginManager:
         return self._iter_actions(api=api, enabled_only=False)
 
     def _iter_actions(
-            self,
-            *,
-            api: IAppAPI,
-            enabled_only: bool,
+        self,
+        *,
+        api: IAppAPI,
+        enabled_only: bool,
     ) -> Sequence[tuple[ActionSpec, AbcCallable[[IAppAPI], None]]]:
         if not self._plugins:
             self.discover()

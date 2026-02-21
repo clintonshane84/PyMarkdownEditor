@@ -154,7 +154,7 @@ def _install_fake_module(monkeypatch, name: str, **attrs) -> None:
 
 
 def test_run_app_success_path_shows_splash_boots_and_shows_window(
-        monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path
 ) -> None:
     # Patch Qt entrypoints used by app.py
     monkeypatch.setattr(app_mod, "QGuiApplication", FakeQGuiApplication)
