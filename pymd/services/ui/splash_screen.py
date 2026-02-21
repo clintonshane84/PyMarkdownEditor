@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QHBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 
 class SplashScreen(QWidget):
@@ -17,7 +17,9 @@ class SplashScreen(QWidget):
     SRP: display only. No app boot logic inside.
     """
 
-    def __init__(self, *, image_path: Path | None = None, app_title: str = "PyMarkdownEditor") -> None:
+    def __init__(
+            self, *, image_path: Path | None = None, app_title: str = "PyMarkdownEditor"
+    ) -> None:
         super().__init__(None, Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint)
 
         # Transparent backgrounds can hide “white” assets depending on compositor/theme.

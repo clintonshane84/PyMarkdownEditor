@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from PyQt6.QtCore import QByteArray, Qt
 from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
@@ -43,7 +44,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     SettingsService internals (keeps mypy/ruff happy).
     """
 
-    def __init__(self, window: "MainWindow") -> None:
+    def __init__(self, window: MainWindow) -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -148,10 +149,10 @@ class MainWindow(QMainWindow):
 
         # Restore UI state
         geo = self.settings.get_geometry()
-        if isinstance(geo, (bytes, bytearray)):
+        if isinstance(geo, bytes | bytearray):
             self.restoreGeometry(QByteArray(geo))
         split = self.settings.get_splitter()
-        if isinstance(split, (bytes, bytearray)):
+        if isinstance(split, bytes | bytearray):
             self.splitter.restoreState(QByteArray(split))
 
         # Load starting content
@@ -165,7 +166,9 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
+    def attach_plugins(
+            self, *, plugin_manager: object | None, plugin_installer: object | None
+    ) -> None:
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
 
@@ -361,7 +364,9 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if not hasattr(self.plugin_manager, "state_store") or not hasattr(self.plugin_manager, "reload"):
+        if not hasattr(self.plugin_manager, "state_store") or not hasattr(
+                self.plugin_manager, "reload"
+        ):
             QMessageBox.information(
                 self,
                 "Plugins",
@@ -662,9 +667,7 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(
-                f"Exported {exporter.name.upper()}: {out_str}", 3000
-            )
+            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
         except Exception as e:
             QMessageBox.critical(
                 self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
@@ -715,11 +718,11 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- DnD -----------------------------
 
-    def dragEnterEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
+    def dragEnterEvent(self, e: Any) -> None:
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
-    def dropEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
+    def dropEvent(self, e: Any) -> None:
         urls = e.mimeData().urls()
         if not urls:
             return
@@ -729,7 +732,7 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Close -----------------------------
 
-    def closeEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
+    def closeEvent(self, event: Any) -> None:
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)

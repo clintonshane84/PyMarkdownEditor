@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from pymd.plugins.state import SETTINGS_PLUGINS_ENABLED, SettingsPluginStateStore
 
 

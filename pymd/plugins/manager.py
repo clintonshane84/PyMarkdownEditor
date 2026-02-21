@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable as AbcCallable, Sequence
+from collections.abc import Callable as AbcCallable
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 

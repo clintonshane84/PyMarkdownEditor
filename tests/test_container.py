@@ -24,4 +24,4 @@ def test_container_wires_services_exporters_and_plugins(qapp, qsettings):
     assert c.plugin_manager is not None
 
     # Sanity: PluginManager should expose state store (per your manager.py)
-    assert getattr(c.plugin_manager, "state_store") is c.plugin_state
+    assert c.plugin_manager.state_store is c.plugin_state

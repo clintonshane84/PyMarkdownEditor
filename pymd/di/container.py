@@ -53,7 +53,9 @@ class Container:
         # Core services (defaults if not supplied)
         self.renderer: IMarkdownRenderer = renderer or MarkdownRenderer()
         self.file_service: IFileService = files or FileService()
-        self.settings_service: ISettingsService = settings or SettingsService(qsettings or QSettings())
+        self.settings_service: ISettingsService = settings or SettingsService(
+            qsettings or QSettings()
+        )
 
         # Exporter registry instance (per-instance; test-friendly)
         self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
@@ -84,7 +86,7 @@ class Container:
         *,
         organization: str = "PyMarkdownEditor",
         application: str = "PyMarkdownEditor",
-    ) -> "Container":
+    ) -> Container:
         if qsettings is None:
             qsettings = QSettings(organization, application)
         return Container(qsettings=qsettings)

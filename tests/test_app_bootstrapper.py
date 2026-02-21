@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
 from pymd.app_bootstrapper import AppBootstrapper, BootstrapResult
 
-
 # ----------------------------
 # Fakes
 # ----------------------------
+
 
 @dataclass
 class ProgressCall:
@@ -68,6 +68,7 @@ class FakeContainer:
 # Tests
 # ----------------------------
 
+
 def test_boot_success_reports_progress_builds_window_and_reload_plugins(monkeypatch) -> None:
     progress = FakeProgress()
     pm = FakePluginManager(should_raise=False)
@@ -85,7 +86,7 @@ def test_boot_success_reports_progress_builds_window_and_reload_plugins(monkeypa
     assert container.build_main_window_called == 1
     assert pm.reload_called == 1
 
-    # Verify key progress/status sequencing (don’t overfit)
+    # Verify key progress/status sequencing (don't overfit)
     statuses = [c.payload["text"] for c in progress.calls if c.kind == "status"]
     assert statuses == [
         "Initializing…",
@@ -120,7 +121,9 @@ def test_boot_plugin_reload_failure_is_swallowed_and_still_finishes(monkeypatch)
     assert statuses[-1] == "Ready"
 
 
-def test_boot_container_factory_failure_propagates_and_reports_up_to_loading_services(monkeypatch) -> None:
+def test_boot_container_factory_failure_propagates_and_reports_up_to_loading_services(
+        monkeypatch,
+) -> None:
     progress = FakeProgress()
     boot = AppBootstrapper(progress=progress, delay_ms=0)
     monkeypatch.setattr(AppBootstrapper, "_intentional_delay", lambda self: None)
@@ -136,7 +139,9 @@ def test_boot_container_factory_failure_propagates_and_reports_up_to_loading_ser
     assert statuses == ["Initializing…", "Loading services…"]
 
 
-def test_boot_build_main_window_failure_propagates_and_reports_up_to_building_interface(monkeypatch) -> None:
+def test_boot_build_main_window_failure_propagates_and_reports_up_to_building_interface(
+        monkeypatch,
+) -> None:
     progress = FakeProgress()
     container = FakeContainer(build_raises=True)
 

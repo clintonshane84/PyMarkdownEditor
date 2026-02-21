@@ -1,20 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Callable, Sequence
 
-import pytest
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox, QPushButton, QTableWidgetItem
-from PyQt6.QtTest import QSignalSpy
 
 import pymd.services.ui.plugins_dialog as dlg_mod
 from pymd.plugins.pip_installer import PipResult
 
-
 # ----------------------------
 # Fakes
 # ----------------------------
+
 
 class FakeStateStore:
     def __init__(self) -> None:
@@ -106,6 +104,7 @@ class FakeCatalogItem:
 # Helpers
 # ----------------------------
 
+
 def _cell_button(table, row: int, col: int) -> QPushButton:
     w = table.cellWidget(row, col)
     assert isinstance(w, QPushButton)
@@ -115,6 +114,7 @@ def _cell_button(table, row: int, col: int) -> QPushButton:
 # ----------------------------
 # Tests
 # ----------------------------
+
 
 def test_plugins_dialog_refresh_toggle_and_reload_success(qapp, monkeypatch):
     # Patch modal dialogs so tests never block
@@ -203,13 +203,21 @@ def test_plugins_dialog_install_and_uninstall_success_and_fail(qapp, monkeypatch
     # Patch message boxes
     info_called = {"n": 0}
     crit_called = {"n": 0}
-    monkeypatch.setattr(dlg_mod.QMessageBox, "information",
-                        lambda *a, **k: info_called.__setitem__("n", info_called["n"] + 1))
-    monkeypatch.setattr(dlg_mod.QMessageBox, "critical",
-                        lambda *a, **k: crit_called.__setitem__("n", crit_called["n"] + 1))
+    monkeypatch.setattr(
+        dlg_mod.QMessageBox,
+        "information",
+        lambda *a, **k: info_called.__setitem__("n", info_called["n"] + 1),
+    )
+    monkeypatch.setattr(
+        dlg_mod.QMessageBox,
+        "critical",
+        lambda *a, **k: crit_called.__setitem__("n", crit_called["n"] + 1),
+    )
 
     # Uninstall confirmation: Yes
-    monkeypatch.setattr(dlg_mod.QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(
+        dlg_mod.QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
+    )
 
     state = FakeStateStore()
     pip = FakePipWithSignals()
@@ -306,8 +314,11 @@ def test_plugins_dialog_install_and_uninstall_success_and_fail(qapp, monkeypatch
 def test_plugins_dialog_fail_when_no_package_and_fail_when_no_pip_signals(qapp, monkeypatch):
     # Patch message boxes
     crit_called = {"n": 0}
-    monkeypatch.setattr(dlg_mod.QMessageBox, "critical",
-                        lambda *a, **k: crit_called.__setitem__("n", crit_called["n"] + 1))
+    monkeypatch.setattr(
+        dlg_mod.QMessageBox,
+        "critical",
+        lambda *a, **k: crit_called.__setitem__("n", crit_called["n"] + 1),
+    )
     monkeypatch.setattr(dlg_mod.QMessageBox, "information", lambda *a, **k: None)
 
     state = FakeStateStore()
@@ -377,7 +388,9 @@ def test_plugins_dialog_uninstall_cancelled_does_not_call_pip(qapp, monkeypatch)
     monkeypatch.setattr(dlg_mod.QMessageBox, "information", lambda *a, **k: None)
 
     # Uninstall confirmation: No
-    monkeypatch.setattr(dlg_mod.QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(
+        dlg_mod.QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No
+    )
 
     state = FakeStateStore()
     pip = FakePipWithSignals()

@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
-
-import pytest
+from typing import Any
 
 import pymd.plugins.manager as manager_mod
 from pymd.plugins.manager import PluginManager
 
-
 # ------------------------------
 # Test doubles
 # ------------------------------
+
 
 @dataclass(frozen=True)
 class _Meta:
@@ -36,6 +35,7 @@ class _StateStore:
 
 class _Api:
     """Minimal IAppAPI double."""
+
     pass
 
 
@@ -69,6 +69,7 @@ class _PluginActionsBoom(_PluginOK):
 # ------------------------------
 # Tests
 # ------------------------------
+
 
 def test_discover_and_list_plugins_skips_broken_factories(monkeypatch):
     good = _PluginOK("good")
@@ -119,8 +120,8 @@ def test_reload_activates_enabled_plugins_and_skips_activation_failures(monkeypa
     assert boom.activated_with is None
 
     # internal active set should contain ok but not boom
-    assert "ok" in pm._active  # noqa: SLF001 (whitebox test is intentional here)
-    assert "boom" not in pm._active  # noqa: SLF001
+    assert "ok" in pm._active
+    assert "boom" not in pm._active
 
 
 def test_reload_deactivates_when_disabled(monkeypatch):
@@ -138,7 +139,7 @@ def test_reload_deactivates_when_disabled(monkeypatch):
     pm = PluginManager(state=state, api=api)
 
     pm.reload()
-    assert "ok" in pm._active  # noqa: SLF001
+    assert "ok" in pm._active
     assert ok.deactivated is False
 
     # now disable and reload: should deactivate
@@ -146,7 +147,7 @@ def test_reload_deactivates_when_disabled(monkeypatch):
     pm.reload()
 
     assert ok.deactivated is True
-    assert "ok" not in pm._active  # noqa: SLF001
+    assert "ok" not in pm._active
 
 
 def test_reload_clears_active_when_api_missing(monkeypatch):
@@ -163,10 +164,10 @@ def test_reload_clears_active_when_api_missing(monkeypatch):
     pm = PluginManager(state=state, api=None)
 
     # even if enabled, without api it should not activate and should clear active
-    pm._active["ok"] = ok  # noqa: SLF001 (simulate previously active)
+    pm._active["ok"] = ok
     pm.reload()
 
-    assert pm._active == {}  # noqa: SLF001
+    assert pm._active == {}
 
 
 def test_iter_enabled_actions_success_and_failure_paths(monkeypatch):
@@ -203,7 +204,7 @@ def test_iter_enabled_actions_success_and_failure_paths(monkeypatch):
     assert len(actions) == 1
 
     spec, fn = actions[0]
-    assert getattr(spec, "title") == "Do Thing"
+    assert spec.title == "Do Thing"
 
     # execute returned wrapper
     fn(api)

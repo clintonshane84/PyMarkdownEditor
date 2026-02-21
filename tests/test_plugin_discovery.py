@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 import pymd.plugins.discovery as discovery_mod
-
 
 # ----------------------------
 # Fakes
 # ----------------------------
+
 
 @dataclass
 class FakeDist:
@@ -51,6 +51,7 @@ class FakeEntryPointsLegacy(dict):
 # ----------------------------
 # Tests
 # ----------------------------
+
 
 def test_discover_plugins_success_select_path(monkeypatch):
     # Arrange

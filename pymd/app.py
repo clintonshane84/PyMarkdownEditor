@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from pathlib import Path
-import sys
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication
@@ -23,7 +23,7 @@ def _resource_path(rel: str) -> Path:
       sys._MEIPASS/assets/...
     """
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        return Path(getattr(sys, "_MEIPASS")) / rel  # type: ignore[arg-type]
+        return Path(sys._MEIPASS) / rel  # type: ignore[arg-type]
 
     # repo root = parent of the "pymd" package folder
     repo_root = Path(__file__).resolve().parent.parent

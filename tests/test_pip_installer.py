@@ -3,16 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import QObject, QByteArray, pyqtSignal
+from PyQt6.QtCore import QByteArray, QObject, pyqtSignal
 from PyQt6.QtTest import QSignalSpy
 
 import pymd.plugins.pip_installer as pip_mod
 from pymd.plugins.pip_installer import PipResult, QtPipInstaller
 
-
 # ----------------------------
 # Fakes
 # ----------------------------
+
 
 @dataclass
 class _FakeEnv:
@@ -29,6 +29,7 @@ class FakeQProcess(QObject):
     - start() does NOT auto-emit.
     - test calls play_script() explicitly.
     """
+
     readyReadStandardOutput = pyqtSignal()
     readyReadStandardError = pyqtSignal()
     finished = pyqtSignal(int, object)
@@ -87,6 +88,7 @@ class FakeQProcess(QObject):
 # ----------------------------
 # Tests
 # ----------------------------
+
 
 def test_pip_install_success_emits_output_and_finished_ok(qapp, monkeypatch):
     created: dict[str, FakeQProcess] = {}

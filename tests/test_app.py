@@ -1,21 +1,22 @@
 from __future__ import annotations
 
+import sys as _sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-import sys as _sys
+from typing import ClassVar
 
 import pytest
 
 import pymd.app as app_mod
 
-
 # ----------------------------
 # Fakes (Qt)
 # ----------------------------
 
+
 class FakeQGuiApplication:
-    set_attribute_calls: list[tuple[object, bool]] = []
+    set_attribute_calls: ClassVar[list[tuple[object, bool]]] = []
 
     @classmethod
     def setAttribute(cls, attr: object, on: bool) -> None:
@@ -25,6 +26,13 @@ class FakeQGuiApplication:
 class FakeQApplication:
     org_name: str | None = None
     app_name: str | None = None
+
+    @pytest.fixture(autouse=True)
+    def _reset_fake_qt_state():
+        FakeQGuiApplication.set_attribute_calls.clear()
+        FakeQApplication.org_name = None
+        FakeQApplication.app_name = None
+        yield
 
     def __init__(self, argv: list[str]) -> None:
         self.argv = list(argv)
@@ -50,6 +58,7 @@ class FakeQApplication:
 # ----------------------------
 # Fakes (UI + boot)
 # ----------------------------
+
 
 class FakeSplashScreen:
     def __init__(self, *, image_path: Path, app_title: str) -> None:
@@ -113,6 +122,7 @@ class FakeBootstrapperBoom(FakeBootstrapper):
 # Fakes (Container)
 # ----------------------------
 
+
 class FakeContainer:
     def __init__(self, *, window: FakeWindow | None = None) -> None:
         self.window = window or FakeWindow()
@@ -130,6 +140,7 @@ class FakeContainer:
 # Helpers to inject importable modules
 # ----------------------------
 
+
 def _install_fake_module(monkeypatch, name: str, **attrs) -> None:
     m = ModuleType(name)
     for k, v in attrs.items():
@@ -141,7 +152,10 @@ def _install_fake_module(monkeypatch, name: str, **attrs) -> None:
 # Tests
 # ----------------------------
 
-def test_run_app_success_path_shows_splash_boots_and_shows_window(monkeypatch, tmp_path: Path) -> None:
+
+def test_run_app_success_path_shows_splash_boots_and_shows_window(
+        monkeypatch, tmp_path: Path
+) -> None:
     # Patch Qt entrypoints used by app.py
     monkeypatch.setattr(app_mod, "QGuiApplication", FakeQGuiApplication)
     monkeypatch.setattr(app_mod, "QApplication", FakeQApplication)
@@ -153,7 +167,9 @@ def test_run_app_success_path_shows_splash_boots_and_shows_window(monkeypatch, t
     monkeypatch.setattr(app_mod, "_resource_path", lambda rel: splash_path)
 
     # Inject modules imported inside try:
-    _install_fake_module(monkeypatch, "pymd.services.ui.splash_screen", SplashScreen=FakeSplashScreen)
+    _install_fake_module(
+        monkeypatch, "pymd.services.ui.splash_screen", SplashScreen=FakeSplashScreen
+    )
     _install_fake_module(monkeypatch, "pymd.app_bootstrapper", AppBootstrapper=FakeBootstrapper)
 
     # Patch Container.default
@@ -170,20 +186,22 @@ def test_run_app_success_path_shows_splash_boots_and_shows_window(monkeypatch, t
 
     # Splash created + shown + closed
     # (we can recover it via the bootstrapper progress reference)
-    # easiest: check that the window was shown and open called; splash close implied by no exception.
+    # easiest: check that the window was shown and open called;
+    # splash close implied by no exception.
     assert container.window.shown is True
     assert container.window.opened == file_to_open
 
     # Bootstrapper was used (called once)
     # We can infer by: build_main_window called once with no kwargs (success path),
-    # and also by: start_path was opened via _open_path instead of container.build_main_window(start_path=...)
+    # and also by: start_path was opened via _open_path instead of
+    # container.build_main_window(start_path=...)
     assert container.build_main_window_called == 1
 
     # QApplication wiring happened
     assert FakeQApplication.org_name == app_mod.APP_ORG
     assert FakeQApplication.app_name == app_mod.APP_NAME
 
-    # SetAttribute called (we don’t assert exact enum object, just that it was invoked)
+    # SetAttribute called (we don't assert exact enum object, just that it was invoked)
     assert FakeQGuiApplication.set_attribute_calls, "QGuiApplication.setAttribute was not called"
 
 
@@ -197,10 +215,15 @@ def test_run_app_fallback_path_when_bootstrapper_fails(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(app_mod, "_resource_path", lambda rel: splash_path)
 
     # Inject splash + a bootstrapper that raises on boot()
-    _install_fake_module(monkeypatch, "pymd.services.ui.splash_screen", SplashScreen=FakeSplashScreen)
+    _install_fake_module(
+        monkeypatch, "pymd.services.ui.splash_screen", SplashScreen=FakeSplashScreen
+    )
     _install_fake_module(monkeypatch, "pymd.app_bootstrapper", AppBootstrapper=FakeBootstrapperBoom)
 
-    # Two containers: one for try-path, one for fallback (because your code calls Container.default() again)
+    """
+    Two containers: one for try-path, one for fallback
+    because your code calls Container.default() again
+    """
     try_container = FakeContainer(window=FakeWindow())
     fallback_container = FakeContainer(window=FakeWindow())
 
