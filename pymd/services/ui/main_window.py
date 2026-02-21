@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from PyQt6.QtCore import QByteArray, Qt
 from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
@@ -25,7 +24,7 @@ from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
 from pymd.services.ui.create_link import CreateLinkDialog
 from pymd.services.ui.find_replace import FindReplaceDialog
-from pymd.services.ui.plugins_dialog import PluginsDialog
+from pymd.services.ui.plugins_dialog import InstalledPluginRow, PluginsDialog
 from pymd.services.ui.table_dialog import TableDialog
 from pymd.utils.constants import MAX_RECENTS
 
@@ -44,7 +43,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     SettingsService internals (keeps mypy/ruff happy).
     """
 
-    def __init__(self, window: MainWindow) -> None:
+    def __init__(self, window: "MainWindow") -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -115,6 +114,7 @@ class MainWindow(QMainWindow):
         self._plugins_dialog: PluginsDialog | None = None
         self._plugins_menu: QMenu | None = None
         self._plugin_action_qactions: list[QAction] = []
+        self._plugins_dialog_hooked: bool = False
 
         # Widgets
         self.editor = QTextEdit(self)
@@ -165,11 +165,24 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(
-        self, *, plugin_manager: object | None, plugin_installer: object | None
-    ) -> None:
+    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
+
+        # Late-bind API if supported
+        if self.plugin_manager is not None and hasattr(self.plugin_manager, "set_api"):
+            try:
+                self.plugin_manager.set_api(self._app_api)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+        # Best-effort reload to discover/activate enabled plugins
+        if self.plugin_manager is not None and hasattr(self.plugin_manager, "reload"):
+            try:
+                self.plugin_manager.reload()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
         self._rebuild_plugin_actions()
 
     # ----------------------------- UI creation -----------------------------
@@ -348,23 +361,38 @@ class MainWindow(QMainWindow):
             )
             return
 
+        if not hasattr(self.plugin_manager, "state_store") or not hasattr(self.plugin_manager, "reload"):
+            QMessageBox.information(
+                self,
+                "Plugins",
+                "Plugin manager is not compatible with this UI (missing expected APIs).",
+            )
+            return
+
         if self._plugins_dialog is None:
+            # mypy: ensure get_installed matches PluginsDialog's signature.
+            def _get_installed() -> Iterable[InstalledPluginRow]:
+                # PluginManager returns PluginInfo objects (same attribute names).
+                rows = self.plugin_manager.get_installed_rows()  # type: ignore[attr-defined]
+                return rows  # type: ignore[return-value]
+
             self._plugins_dialog = PluginsDialog(
                 parent=self,
-                # PluginsDialog expects these DI-provided collaborators:
                 state=self.plugin_manager.state_store,  # type: ignore[attr-defined]
-                pip=self.plugin_installer,  # QtPipInstaller implements the right signals
-                get_installed=self.plugin_manager.get_installed_rows,  # type: ignore[attr-defined]
+                pip=self.plugin_installer,  # QtPipInstaller emits output(str), finished(object)
+                get_installed=_get_installed,  # type: ignore[arg-type]
                 reload_plugins=self.plugin_manager.reload,  # type: ignore[attr-defined]
-                catalog=getattr(self.plugin_manager, "catalog", None),  # type: ignore[attr-defined]
+                catalog=getattr(self.plugin_manager, "catalog", None),
             )
+
+        # Ensure we rebuild actions after dialog closes (covers enable/disable + reload workflows).
+        if not self._plugins_dialog_hooked:
+            self._plugins_dialog.finished.connect(lambda _=0: self._rebuild_plugin_actions())  # type: ignore[arg-type]
+            self._plugins_dialog_hooked = True
+
         self._plugins_dialog.show()
         self._plugins_dialog.raise_()
         self._plugins_dialog.activateWindow()
-
-    def _on_plugins_changed(self) -> None:
-        self._rebuild_plugin_actions()
-        self._render_preview()
 
     def _rebuild_plugin_actions(self) -> None:
         """
@@ -634,7 +662,9 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
+            self.statusBar().showMessage(
+                f"Exported {exporter.name.upper()}: {out_str}", 3000
+            )
         except Exception as e:
             QMessageBox.critical(
                 self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
@@ -685,11 +715,11 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- DnD -----------------------------
 
-    def dragEnterEvent(self, e: Any) -> None:
+    def dragEnterEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
-    def dropEvent(self, e: Any) -> None:
+    def dropEvent(self, e: Any) -> None:  # noqa: N802 (Qt naming)
         urls = e.mimeData().urls()
         if not urls:
             return
@@ -699,7 +729,7 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Close -----------------------------
 
-    def closeEvent(self, event: Any) -> None:
+    def closeEvent(self, event: Any) -> None:  # noqa: N802 (Qt naming)
         self.settings.set_geometry(bytes(self.saveGeometry()))
         self.settings.set_splitter(bytes(self.splitter.saveState()))
         super().closeEvent(event)

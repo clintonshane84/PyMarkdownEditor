@@ -8,16 +8,15 @@ from pymd.domain.interfaces import (
     IMarkdownRenderer,
     ISettingsService,
 )
+from pymd.plugins.manager import PluginManager
+from pymd.plugins.pip_installer import QtPipInstaller
+from pymd.plugins.state import SettingsPluginStateStore
 from pymd.services.exporters import WebEnginePdfExporter
-
-# Exporter registry: **singleton instance** (do NOT call it)
 from pymd.services.exporters.base import ExporterRegistryInst
 from pymd.services.exporters.html_exporter import HtmlExporter
 from pymd.services.file_service import FileService
 from pymd.services.markdown_renderer import MarkdownRenderer
 from pymd.services.settings_service import SettingsService
-
-# Thin Qt window
 from pymd.services.ui.main_window import MainWindow
 
 # Optional adapters & presenter (keep optional to avoid hard failures in lean builds)
@@ -37,7 +36,8 @@ class Container:
     """
     Lightweight DI container:
       - Wires default services if not provided.
-      - Ensures built-in exporters (html, pdf) are registered on the singleton registry.
+      - Ensures built-in exporters (html, pdf) are registered on the registry.
+      - Wires plugin system (state store + pip installer + plugin manager).
       - Optionally wires presenter/adapters if present.
     """
 
@@ -53,30 +53,27 @@ class Container:
         # Core services (defaults if not supplied)
         self.renderer: IMarkdownRenderer = renderer or MarkdownRenderer()
         self.file_service: IFileService = files or FileService()
-        self.settings_service: ISettingsService = settings or SettingsService(
-            qsettings or QSettings()
-        )
+        self.settings_service: ISettingsService = settings or SettingsService(qsettings or QSettings())
 
-        # Exporter registry **singleton instance**
+        # Exporter registry instance (per-instance; test-friendly)
         self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
-
-        # Ensure built-ins are present on the same instance the tests will read
         self._ensure_builtin_exporters(self.exporter_registry)
+
+        # Plugins (real objects; feature enabled)
+        self.plugin_state = SettingsPluginStateStore(settings=self.settings_service)
+        self.pip_installer = QtPipInstaller()
+        self.plugin_manager = PluginManager(state=self.plugin_state)
 
         # Optional UI ports
         self.dialogs = (
             dialogs
             if dialogs is not None
-            else (
-                QtFileDialogService() if QtFileDialogService is not None else None  # type: ignore[call-arg]
-            )
+            else (QtFileDialogService() if QtFileDialogService is not None else None)  # type: ignore[call-arg]
         )
         self.messages = (
             messages
             if messages is not None
-            else (
-                QtMessageService() if QtMessageService is not None else None  # type: ignore[call-arg]
-            )
+            else (QtMessageService() if QtMessageService is not None else None)  # type: ignore[call-arg]
         )
 
     # ---------- Class helper (compat with prior API) ----------
@@ -87,7 +84,7 @@ class Container:
         *,
         organization: str = "PyMarkdownEditor",
         application: str = "PyMarkdownEditor",
-    ) -> Container:
+    ) -> "Container":
         if qsettings is None:
             qsettings = QSettings(organization, application)
         return Container(qsettings=qsettings)
@@ -97,6 +94,7 @@ class Container:
     def _ensure_builtin_exporters(self, exporter_registry: IExporterRegistry | None) -> None:
         if exporter_registry is None:
             exporter_registry = ExporterRegistryInst()
+
         # html
         try:
             exporter_registry.get("html")
@@ -135,7 +133,7 @@ class Container:
         app_title: str = "PyMarkdownEditor",
     ) -> MainWindow:
         """
-        Create the Qt MainWindow, wire services, and (optionally) attach a presenter.
+        Create the Qt MainWindow, wire services, plugins, and (optionally) attach a presenter.
         """
         window = MainWindow(
             renderer=self.renderer,
@@ -145,6 +143,33 @@ class Container:
             start_path=start_path,
             app_title=app_title,
         )
+
+        # --- Plugins wiring (enabled) ---
+        #
+        # MainWindow expects:
+        #   attach_plugins(plugin_manager=..., plugin_installer=...)
+        #
+        # PluginManager needs AppAPI, which is created inside MainWindow.
+        try:
+            # Bind API to plugin manager
+            if hasattr(self.plugin_manager, "set_api"):
+                api = getattr(window, "_app_api", None)
+                if api is not None:
+                    self.plugin_manager.set_api(api)  # type: ignore[arg-type]
+
+            # Attach objects to window
+            if hasattr(window, "attach_plugins"):
+                window.attach_plugins(
+                    plugin_manager=self.plugin_manager,
+                    plugin_installer=self.pip_installer,
+                )
+
+            # Initial activation/discovery (so enabled plugins are live immediately)
+            if hasattr(self.plugin_manager, "reload"):
+                self.plugin_manager.reload()
+        except Exception:
+            # Plugins should not crash the app; worst case, UI still runs.
+            pass
 
         # Attach presenter if available
         try:
