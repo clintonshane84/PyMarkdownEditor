@@ -8,7 +8,7 @@ from typing import Literal, Protocol, runtime_checkable
 # Plugin API versioning
 # -----------------------------------------------------------------------------
 # Bump MAJOR when you introduce breaking changes to these contracts.
-PLUGIN_API_VERSION = "1.0"
+PLUGIN_API_VERSION = "1.1"
 
 # Conventional entry-point group name plugin packages should use in pyproject.toml:
 # [project.entry-points."pymarkdowneditor.plugins"]
@@ -87,7 +87,7 @@ class IAppAPI(Protocol):
     def set_current_text(self, text: str) -> None: ...
     def insert_text_at_cursor(self, text: str) -> None: ...
 
-    # Optional, but helpful for plugins that need context
+    # Optional but useful context
     def get_current_path(self) -> str | None: ...
     def is_modified(self) -> bool: ...
 
@@ -106,8 +106,8 @@ class IAppAPI(Protocol):
     # -----------------------------
     # Plugin-scoped settings
     # -----------------------------
-    # These are intentionally typed as strings for stability across QSettings
-    # backends and future host changes. Plugin authors can encode JSON if needed.
+    # Intentionally typed as strings for long-term stability across settings backends.
+    # Plugin authors can encode JSON if needed.
     def get_plugin_setting(
         self,
         plugin_id: str,
@@ -127,6 +127,14 @@ class IAppAPI(Protocol):
     def log_warning(self, message: str) -> None: ...
     def log_error(self, message: str) -> None: ...
 
+    # -----------------------------
+    # Theming (host-controlled)
+    # -----------------------------
+    def set_theme(self, theme_id: str) -> None: ...
+
+    def get_theme(self) -> str: ...
+
+    def list_themes(self) -> Sequence[str]: ...
 
 # -----------------------------------------------------------------------------
 # Plugin contract
@@ -190,6 +198,40 @@ class IPlugin(Protocol):
 
 
 # -----------------------------------------------------------------------------
+# Optional lifecycle hooks (duck-typed by host)
+# -----------------------------------------------------------------------------
+
+
+@runtime_checkable
+class IPluginOnLoad(Protocol):
+    """
+    Optional hook: called once per app start for enabled plugins, before activate().
+
+    Use cases:
+      - read plugin settings
+      - warm caches
+      - validate environment
+      - register non-UI integrations that don't require a visible window
+    """
+
+    def on_load(self, api: IAppAPI) -> None: ...
+
+
+@runtime_checkable
+class IPluginOnReady(Protocol):
+    """
+    Optional hook: called after the main window is shown (post-show).
+
+    Use cases:
+      - UI-related work that benefits from a responsive event loop
+      - "first render" enhancements
+      - deferred initialization (timers, async tasks) that should start after show()
+    """
+
+    def on_ready(self, api: IAppAPI) -> None: ...
+
+
+# -----------------------------------------------------------------------------
 # Optional: convenience base class plugin authors can inherit from
 # -----------------------------------------------------------------------------
 
@@ -218,3 +260,11 @@ class BasePlugin:
 
     def register_markdown_extensions(self) -> Sequence[object]:  # pragma: no cover
         return ()
+
+    # Optional hooks can be implemented by subclasses without inheriting from
+    # separate mixins; the host will check via runtime protocols (best-effort).
+    def on_load(self, api: IAppAPI) -> None:  # pragma: no cover
+        _ = api
+
+    def on_ready(self, api: IAppAPI) -> None:  # pragma: no cover
+        _ = api

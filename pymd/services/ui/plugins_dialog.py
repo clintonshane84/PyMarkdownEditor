@@ -32,10 +32,26 @@ class _PipSignals(Protocol):
       - finished: pyqtSignal(object)  # PipResult
     """
 
-    # PyQt signals are "attributes" with connect/disconnect methods.
-    # We type them minimally to satisfy mypy.
     output: object
     finished: object
+
+
+class _InstalledRowLike(Protocol):
+    """
+    Minimal row shape required by PluginsDialog.
+
+    NOTE:
+      - package is optional because PluginManager may return PluginInfo-like objects
+        without a package attribute (built-ins, older versions, etc.)
+    """
+
+    plugin_id: str
+    name: str
+    version: str
+    description: str
+
+    # optional
+    package: str  # may not exist at runtime
 
 
 @dataclass(frozen=True)
@@ -56,7 +72,7 @@ class InstalledPluginRow:
 
 class PluginsDialog(QDialog):
     """
-    V1 Plugin Manager UI:
+    Plugin Manager UI:
       - Installed plugins: enable/disable + uninstall (if package known)
       - Catalog plugins: install
       - Reload button to re-discover & activate enabled plugins
@@ -74,13 +90,16 @@ class PluginsDialog(QDialog):
     ROLE_SOURCE = int(Qt.ItemDataRole.UserRole) + 1
     ROLE_PACKAGE = int(Qt.ItemDataRole.UserRole) + 2
 
+    SOURCE_INSTALLED = "Installed"
+    SOURCE_CATALOG = "Catalog"
+
     def __init__(
         self,
         *,
         parent=None,
         state: IPluginStateStore,
         pip: QtPipInstaller,
-        get_installed: Callable[[], Sequence[InstalledPluginRow]],
+            get_installed: Callable[[], Sequence[_InstalledRowLike]],
         reload_plugins: Callable[[], None],
         catalog: Sequence[PluginCatalogItem] | None = None,
         auto_reload_on_toggle: bool = True,
@@ -98,7 +117,7 @@ class PluginsDialog(QDialog):
 
         self._reload_timer = QTimer(self)
         self._reload_timer.setSingleShot(True)
-        self._reload_timer.timeout.connect(self._reload_plugins)
+        self._reload_timer.timeout.connect(self._safe_reload_plugins)
 
         layout = QVBoxLayout(self)
 
@@ -147,10 +166,9 @@ class PluginsDialog(QDialog):
         layout.addLayout(bottom)
 
         self.btn_refresh.clicked.connect(self.refresh)
-        self.btn_reload.clicked.connect(self._on_reload)
+        self.btn_reload.clicked.connect(self._on_reload_clicked)
         self.btn_close.clicked.connect(self.close)
 
-        # connect once
         self.table.itemChanged.connect(self._on_item_changed)
 
         self.refresh()
@@ -158,34 +176,37 @@ class PluginsDialog(QDialog):
     # ----------------------------- table -----------------------------
 
     def refresh(self) -> None:
-        installed = {p.plugin_id: p for p in self._get_installed()}
+        installed_rows = list(self._get_installed())
+        installed_by_id = {p.plugin_id: p for p in installed_rows}
 
-        rows: list[tuple[str, str, str, str, str, str, str]] = []
         # (pid, name, ver, desc, pkg, source, action)
+        rows: list[tuple[str, str, str, str, str, str, str]] = []
 
         # installed plugins first
-        for p in installed.values():
-            pkg = p.package.strip()
-            # uninstall allowed if we can map to a package (either from discovery or catalog)
+        for p in installed_rows:
+            # FIX: package is optional on row-like objects
+            pkg = str(getattr(p, "package", "") or "").strip()
+
+            # uninstall allowed if we can map to a package (either from row or catalog)
             can_uninstall = bool(pkg) or bool(self._pip_package_for(p.plugin_id))
             action = "Uninstall" if can_uninstall else "—"
-            rows.append((p.plugin_id, p.name, p.version, p.description, pkg, "Installed", action))
+            rows.append((p.plugin_id, p.name, p.version, p.description, pkg, self.SOURCE_INSTALLED, action))
 
         # catalog plugins not installed
         for c in self._catalog:
-            if c.plugin_id not in installed:
+            if c.plugin_id not in installed_by_id:
                 rows.append(
-                    (c.plugin_id, c.name, "", c.description, c.pip_package, "Catalog", "Install")
+                    (c.plugin_id, c.name, "", c.description, c.pip_package, self.SOURCE_CATALOG, "Install")
                 )
 
-        rows.sort(key=lambda x: (x[5] != "Installed", x[2] == "", x[1].lower(), x[0].lower()))
+        rows.sort(key=lambda x: (x[5] != self.SOURCE_INSTALLED, x[1].lower(), x[0].lower()))
 
         self.table.blockSignals(True)
         try:
             self.table.setRowCount(len(rows))
 
             for r, (pid, name, ver, desc, pkg, source, action) in enumerate(rows):
-                is_installed = source == "Installed"
+                is_installed = source == self.SOURCE_INSTALLED
                 enabled = self._state.get_enabled(pid, default=False)
 
                 enabled_item = QTableWidgetItem()
@@ -194,21 +215,16 @@ class PluginsDialog(QDialog):
                 enabled_item.setData(self.ROLE_PACKAGE, pkg)
 
                 if is_installed:
-                    enabled_item.setFlags(
-                        Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
-                    )
+                    enabled_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable)
                     enabled_item.setCheckState(
                         Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked
                     )
                 else:
-                    # catalog-only: can't enable before install
                     enabled_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
                     enabled_item.setCheckState(Qt.CheckState.Unchecked)
 
                 self.table.setItem(r, self.COL_ENABLED, enabled_item)
-
-                pid_item = QTableWidgetItem(pid)
-                self.table.setItem(r, self.COL_PLUGIN_ID, pid_item)
+                self.table.setItem(r, self.COL_PLUGIN_ID, QTableWidgetItem(pid))
 
                 name_item = QTableWidgetItem(name)
                 if desc:
@@ -221,9 +237,7 @@ class PluginsDialog(QDialog):
 
                 btn = QPushButton(action, self)
                 btn.setEnabled(action in ("Install", "Uninstall"))
-                btn.clicked.connect(
-                    lambda _=False, xpid=pid, xaction=action: self._on_action(xpid, xaction)
-                )
+                btn.clicked.connect(lambda _=False, xpid=pid, xaction=action: self._on_action(xpid, xaction))
                 self.table.setCellWidget(r, self.COL_ACTION, btn)
         finally:
             self.table.blockSignals(False)
@@ -234,20 +248,10 @@ class PluginsDialog(QDialog):
         needle = self._search.text().strip().lower()
         for r in range(self.table.rowCount()):
             pid = (
-                self.table.item(r, self.COL_PLUGIN_ID).text()
-                if self.table.item(r, self.COL_PLUGIN_ID)
-                else ""
-            ).lower()
-            name = (
-                self.table.item(r, self.COL_NAME).text()
-                if self.table.item(r, self.COL_NAME)
-                else ""
-            ).lower()
-            pkg = (
-                self.table.item(r, self.COL_PACKAGE).text()
-                if self.table.item(r, self.COL_PACKAGE)
-                else ""
-            ).lower()
+                self.table.item(r, self.COL_PLUGIN_ID).text() if self.table.item(r, self.COL_PLUGIN_ID) else "").lower()
+            name = (self.table.item(r, self.COL_NAME).text() if self.table.item(r, self.COL_NAME) else "").lower()
+            pkg = (self.table.item(r, self.COL_PACKAGE).text() if self.table.item(r, self.COL_PACKAGE) else "").lower()
+
             show = not needle or (needle in pid or needle in name or needle in pkg)
             self.table.setRowHidden(r, not show)
 
@@ -258,7 +262,7 @@ class PluginsDialog(QDialog):
             return
 
         source = item.data(self.ROLE_SOURCE)
-        if source != "Installed":
+        if source != self.SOURCE_INSTALLED:
             return
 
         pid = item.data(self.ROLE_PLUGIN_ID)
@@ -273,9 +277,16 @@ class PluginsDialog(QDialog):
 
     # ----------------------------- reload -----------------------------
 
-    def _on_reload(self) -> None:
-        self._reload_plugins()
+    def _safe_reload_plugins(self) -> None:
+        try:
+            self._reload_plugins()
+        except Exception:
+            pass
+
+    def _on_reload_clicked(self) -> None:
+        self._safe_reload_plugins()
         QMessageBox.information(self, "Plugins", "Plugins reloaded.")
+        self.refresh()
 
     # ----------------------------- actions -----------------------------
 
@@ -299,25 +310,20 @@ class PluginsDialog(QDialog):
     def _pip_package_for(self, plugin_id: str) -> str | None:
         for c in self._catalog:
             if c.plugin_id == plugin_id:
-                return c.pip_package
+                pkg = (c.pip_package or "").strip()
+                return pkg or None
         return None
 
     def _installed_package_for(self, plugin_id: str) -> str | None:
         for p in self._get_installed():
             if p.plugin_id == plugin_id:
-                pkg = p.package.strip()
+                pkg = str(getattr(p, "package", "") or "").strip()
                 return pkg or None
         return None
 
     # ----------------------------- pip runner -----------------------------
 
     def _run_pip(self, title: str, start: Callable[[], None]) -> None:
-        """
-        Show a modal progress dialog and stream output from QtPipInstaller signals
-        if the provided `pip` implementation exposes them.
-
-        This will not trip mypy because we narrow via QObject + _PipSignals.
-        """
         dlg = PipProgressDialog(title, parent=self)
 
         pip_obj = self._pip
@@ -326,7 +332,6 @@ class PluginsDialog(QDialog):
             and hasattr(pip_obj, "output")
             and hasattr(pip_obj, "finished")
         )
-
         if not has_signals:
             QMessageBox.critical(
                 self,
@@ -348,8 +353,8 @@ class PluginsDialog(QDialog):
                 else:
                     dlg.set_done(False, f"Failed (exit code {result.exit_code}). See log.")
                 self.refresh()
+                self._safe_reload_plugins()
             finally:
-                # disconnect for this run
                 try:
                     pip_qt.output.disconnect(on_output)  # type: ignore[attr-defined]
                 except Exception:
@@ -359,11 +364,14 @@ class PluginsDialog(QDialog):
                 except Exception:
                     pass
 
-        # connect for this run
         pip_qt.output.connect(on_output)  # type: ignore[attr-defined]
         pip_qt.finished.connect(on_finished)  # type: ignore[attr-defined]
 
-        dlg.btn_cancel.clicked.connect(lambda: pip_obj.cancel())
+        if hasattr(pip_obj, "cancel"):
+            dlg.btn_cancel.clicked.connect(lambda: pip_obj.cancel())  # type: ignore[misc]
+        else:
+            dlg.btn_cancel.setEnabled(False)
+
         dlg.btn_close.clicked.connect(dlg.accept)
 
         start()

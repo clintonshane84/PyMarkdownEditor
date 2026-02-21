@@ -4,7 +4,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QApplication
 
@@ -16,7 +16,7 @@ def _resource_path(rel: str) -> Path:
     """
     Resolve resource path in dev and PyInstaller.
 
-    Dev layout (your case):
+    Dev layout:
       <repo>/assets/...
 
     PyInstaller:
@@ -31,8 +31,10 @@ def _resource_path(rel: str) -> Path:
 
 
 def run_app(argv: Sequence[str]) -> int:
+    # Qt global attribute (required for some WebEngine/OpenGL scenarios)
     QGuiApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
 
+    # App identity (QSettings namespace, etc.)
     QApplication.setOrganizationName(APP_ORG)
     QApplication.setApplicationName(APP_NAME)
     app = QApplication(list(argv))
@@ -41,12 +43,13 @@ def run_app(argv: Sequence[str]) -> int:
 
     splash = None
     try:
+        # Imported inside try so fallback path works even if these imports fail
         from pymd.app_bootstrapper import AppBootstrapper  # type: ignore
         from pymd.services.ui.splash_screen import SplashScreen  # type: ignore
 
         image_path = _resource_path("assets/splash.png")
         splash = SplashScreen(
-            image_path=image_path,  # always pass; SplashScreen will report if missing/unloadable
+            image_path=image_path,  # SplashScreen will report if missing/unloadable
             app_title=APP_NAME,
         )
         splash.show()
@@ -54,19 +57,16 @@ def run_app(argv: Sequence[str]) -> int:
 
         bootstrapper = AppBootstrapper(progress=splash)
 
-        def _make_container() -> Container:
-            return Container.default()
+        # Create container once (so the same DI graph is used for boot + runtime)
+        container: Container = Container.default()
 
-        # bootstrap (your 2s delay can be inside bootstrapper)
-        container = _make_container()
+        # Boot sequence (includes plugin_manager.reload() best-effort inside bootstrapper)
         result = bootstrapper.boot(container_factory=lambda: container)
 
-        # Use the window returned by the bootstrapper if it provides it
+        # Window returned by bootstrapper
         win = result.window  # type: ignore[attr-defined]
-        # If your bootstrapper builds without start_path, keep your existing behavior:
-        # win = container.build_main_window(start_path=start_path, app_title=APP_NAME)
 
-        # Optional: if win supports opening a file post-startup:
+        # Optional: open a file post-startup if the window supports it
         try:
             if start_path is not None and hasattr(win, "_open_path"):
                 win._open_path(start_path)  # type: ignore[attr-defined]
@@ -75,12 +75,21 @@ def run_app(argv: Sequence[str]) -> int:
 
         win.show()
 
+        # Post-show plugin hook (safe next tick)
+        try:
+            pm = getattr(container, "plugin_manager", None)
+            if pm is not None and hasattr(pm, "on_app_ready"):
+                QTimer.singleShot(0, pm.on_app_ready)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
         if splash is not None:
             splash.close()
 
         return app.exec()
 
     except Exception:
+        # Fallback: no splash/bootstrapper, or boot failed. Still start the app.
         if splash is not None:
             try:
                 splash.close()

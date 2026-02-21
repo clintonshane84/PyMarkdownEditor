@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -73,26 +74,35 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
 
     # ---- plugin settings (namespaced) ----
     def get_plugin_setting(
-        self, plugin_id: str, key: str, default: str | None = None
+            self, plugin_id: str, key: str, default: str | None = None
     ) -> str | None:
         return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
     def set_plugin_setting(self, plugin_id: str, key: str, value: str) -> None:
         self._w.settings.set_raw(f"plugins/{plugin_id}/{key}", value)
 
+    def get_theme(self) -> str:
+        return getattr(self._w, "_theme_id", "default")
+
+    def list_themes(self) -> list[str]:
+        return ["default", "midnight", "paper"]
+
+    def set_theme(self, theme_id: str) -> None:
+        self._w.apply_theme(theme_id)
+
 
 class MainWindow(QMainWindow):
     """Thin PyQt window that delegates work to injected services (DIP)."""
 
     def __init__(
-        self,
-        renderer: IMarkdownRenderer,
-        file_service: IFileService,
-        settings: ISettingsService,
-        *,
-        exporter_registry: IExporterRegistry | None = None,
-        start_path: Path | None = None,
-        app_title: str = "PyMarkdownEditor",
+            self,
+            renderer: IMarkdownRenderer,
+            file_service: IFileService,
+            settings: ISettingsService,
+            *,
+            exporter_registry: IExporterRegistry | None = None,
+            start_path: Path | None = None,
+            app_title: str = "PyMarkdownEditor",
     ) -> None:
         super().__init__()
         self.setWindowTitle(app_title)
@@ -164,27 +174,35 @@ class MainWindow(QMainWindow):
         # DnD
         self.setAcceptDrops(True)
 
+        self._theme_id = self.settings.get_raw("ui/theme", "default") or "default"
+        self.apply_theme(self._theme_id)
+
     # ----------------------- Container hook for plugins -----------------------
 
     def attach_plugins(
-        self, *, plugin_manager: object | None, plugin_installer: object | None
+            self, *, plugin_manager: object | None, plugin_installer: object | None
     ) -> None:
+        """
+        Ownership rule:
+          - Bootstrapper owns plugin reload() for deterministic boot.
+          - MainWindow.attach_plugins() must NOT call reload().
+
+        This method only:
+          - stores references
+          - sets API on the manager (best-effort, safe)
+          - rebuilds UI actions from whatever is currently enabled/active
+        """
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
 
-        # Late-bind API if supported
+        # Late-bind API if supported (does NOT activate/reload)
         if self.plugin_manager is not None and hasattr(self.plugin_manager, "set_api"):
             try:
                 self.plugin_manager.set_api(self._app_api)  # type: ignore[attr-defined]
             except Exception:
                 pass
 
-        # Best-effort reload to discover/activate enabled plugins
-        if self.plugin_manager is not None and hasattr(self.plugin_manager, "reload"):
-            try:
-                self.plugin_manager.reload()  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        # IMPORTANT: no plugin_manager.reload() here (bootstrapper owns it)
 
         self._rebuild_plugin_actions()
 
@@ -282,16 +300,16 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_toggle_preview)
 
         for a in (
-            self.act_bold,
-            self.act_italic,
-            self.act_code,
-            self.act_code_block,
-            self.act_h1,
-            self.act_h2,
-            self.act_list,
-            self.act_img,
-            self.act_link,
-            self.act_table,
+                self.act_bold,
+                self.act_italic,
+                self.act_code,
+                self.act_code_block,
+                self.act_h1,
+                self.act_h2,
+                self.act_list,
+                self.act_img,
+                self.act_link,
+                self.act_table,
         ):
             tbf.addAction(a)
 
@@ -317,14 +335,14 @@ class MainWindow(QMainWindow):
 
         editm = m.addMenu("&Edit")
         for a in (
-            self.act_bold,
-            self.act_italic,
-            self.act_code,
-            self.act_code_block,
-            self.act_h1,
-            self.act_h2,
-            self.act_list,
-            self.act_table,
+                self.act_bold,
+                self.act_italic,
+                self.act_code,
+                self.act_code_block,
+                self.act_h1,
+                self.act_h2,
+                self.act_list,
+                self.act_table,
         ):
             editm.addAction(a)
         editm.addSeparator()
@@ -365,7 +383,7 @@ class MainWindow(QMainWindow):
             return
 
         if not hasattr(self.plugin_manager, "state_store") or not hasattr(
-            self.plugin_manager, "reload"
+                self.plugin_manager, "reload"
         ):
             QMessageBox.information(
                 self,
@@ -744,6 +762,68 @@ class MainWindow(QMainWindow):
         Prefer QWebEngineView (JS-capable: MathJax/KaTeX, better CSS),
         fall back to QTextBrowser. Guard imports so the app runs without WebEngine.
         """
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
+
+            return QWebEngineView(self)
+        except Exception:
+            w = QTextBrowser(self)
+            w.setOpenExternalLinks(True)
+            return w
+
+    def apply_theme(self, theme_id: str) -> None:
+        self._theme_id = theme_id
+        self.settings.set_raw("ui/theme", theme_id)
+
+        if theme_id == "default":
+            self.setStyleSheet("")
+            return
+
+        if theme_id == "midnight":
+            self.setStyleSheet(
+                """
+                QMainWindow { background: #1e1e1e; }
+                QTextEdit { background: #111; color: #e6e6e6; border: 1px solid #333; }
+                QTextBrowser { background: #111; color: #e6e6e6; border: 1px solid #333; }
+                QMenuBar, QMenu { background: #1e1e1e; color: #e6e6e6; }
+                QToolBar { background: #1e1e1e; border: none; }
+                """
+            )
+            return
+
+        if theme_id == "paper":
+            self.setStyleSheet(
+                """
+                QMainWindow { background: #fafafa; }
+                QTextEdit { background: #ffffff; color: #111; border: 1px solid #ddd; }
+                QTextBrowser { background: #ffffff; color: #111; border: 1px solid #ddd; }
+                QMenuBar, QMenu { background: #fafafa; color: #111; }
+                QToolBar { background: #fafafa; border: none; }
+                """
+            )
+            return
+
+    def _create_preview_widget(self) -> Any:
+        """
+        Prefer QWebEngineView (JS-capable: MathJax/KaTeX, better CSS),
+        fall back to QTextBrowser.
+
+        IMPORTANT:
+          - QtWebEngine can hard-abort the process in headless / pytest runs.
+          - For deterministic test stability, we disable WebEngine when:
+              * PYTEST_CURRENT_TEST is set (pytest runtime), OR
+              * PYMD_DISABLE_WEBENGINE=1 is set
+        """
+        disable_webengine = (
+                os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
+                or "PYTEST_CURRENT_TEST" in os.environ
+        )
+
+        if disable_webengine:
+            w = QTextBrowser(self)
+            w.setOpenExternalLinks(True)
+            return w
+
         try:
             from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
 

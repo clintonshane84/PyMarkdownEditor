@@ -34,11 +34,12 @@ except Exception:  # pragma: no cover
 
 class Container:
     """
-    Lightweight DI container:
-      - Wires default services if not provided.
-      - Ensures built-in exporters (html, pdf) are registered on the registry.
-      - Wires plugin system (state store + pip installer + plugin manager).
-      - Optionally wires presenter/adapters if present.
+    Lightweight DI container.
+
+    Key guarantees:
+      - Plugin manager + installer are always created and attached to MainWindow consistently.
+      - Container is responsible for *attachment* (refs + API binding), NOT activation.
+      - Activation/reload is owned by the bootstrapper (deterministic boot sequence).
     """
 
     def __init__(
@@ -61,9 +62,9 @@ class Container:
         self.exporter_registry: IExporterRegistry = ExporterRegistryInst()
         self._ensure_builtin_exporters(self.exporter_registry)
 
-        # Plugins (real objects; feature enabled)
+        # Plugins (always available in the container)
         self.plugin_state = SettingsPluginStateStore(settings=self.settings_service)
-        self.pip_installer = QtPipInstaller()
+        self.plugin_installer = QtPipInstaller()
         self.plugin_manager = PluginManager(state=self.plugin_state)
 
         # Optional UI ports
@@ -86,7 +87,7 @@ class Container:
         *,
         organization: str = "PyMarkdownEditor",
         application: str = "PyMarkdownEditor",
-    ) -> Container:
+    ) -> "Container":
         if qsettings is None:
             qsettings = QSettings(organization, application)
         return Container(qsettings=qsettings)
@@ -108,6 +109,33 @@ class Container:
             exporter_registry.get("pdf")
         except KeyError:
             exporter_registry.register(WebEnginePdfExporter())
+
+    def _attach_plugins_to_window(self, window: MainWindow) -> None:
+        """
+        Consistent plugin wiring point.
+
+        Responsibilities:
+          - Bind the window-created AppAPI to the plugin manager (set_api)
+          - Attach plugin manager + installer refs to the window
+
+        Non-responsibilities:
+          - DO NOT call plugin_manager.reload() here (bootstrapper owns activation).
+        """
+        try:
+            api = getattr(window, "_app_api", None)
+            if api is not None and hasattr(self.plugin_manager, "set_api"):
+                self.plugin_manager.set_api(api)  # type: ignore[arg-type]
+        except Exception:
+            pass
+
+        try:
+            if hasattr(window, "attach_plugins"):
+                window.attach_plugins(
+                    plugin_manager=self.plugin_manager,
+                    plugin_installer=self.plugin_installer,
+                )
+        except Exception:
+            pass
 
     # ---------- UI factories ----------
 
@@ -136,6 +164,10 @@ class Container:
     ) -> MainWindow:
         """
         Create the Qt MainWindow, wire services, plugins, and (optionally) attach a presenter.
+
+        NOTE:
+          - Plugin activation happens in AppBootstrapper.boot() (container.plugin_manager.reload()).
+          - This function only guarantees attachment + API binding.
         """
         window = MainWindow(
             renderer=self.renderer,
@@ -146,32 +178,8 @@ class Container:
             app_title=app_title,
         )
 
-        # --- Plugins wiring (enabled) ---
-        #
-        # MainWindow expects:
-        #   attach_plugins(plugin_manager=..., plugin_installer=...)
-        #
-        # PluginManager needs AppAPI, which is created inside MainWindow.
-        try:
-            # Bind API to plugin manager
-            if hasattr(self.plugin_manager, "set_api"):
-                api = getattr(window, "_app_api", None)
-                if api is not None:
-                    self.plugin_manager.set_api(api)  # type: ignore[arg-type]
-
-            # Attach objects to window
-            if hasattr(window, "attach_plugins"):
-                window.attach_plugins(
-                    plugin_manager=self.plugin_manager,
-                    plugin_installer=self.pip_installer,
-                )
-
-            # Initial activation/discovery (so enabled plugins are live immediately)
-            if hasattr(self.plugin_manager, "reload"):
-                self.plugin_manager.reload()
-        except Exception:
-            # Plugins should not crash the app; worst case, UI still runs.
-            pass
+        # --- Plugins wiring (consistent + deterministic) ---
+        self._attach_plugins_to_window(window)
 
         # Attach presenter if available
         try:

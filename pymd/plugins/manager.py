@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable as AbcCallable
-from collections.abc import Sequence
+from collections.abc import Callable as AbcCallable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from pymd.plugins.api import ActionSpec, IAppAPI, IPlugin
+from pymd.plugins.api import ActionSpec, IAppAPI, IPlugin, IPluginOnLoad, IPluginOnReady
 from pymd.plugins.catalog import PluginCatalogItem, default_catalog
 from pymd.plugins.discovery import discover_plugins
 from pymd.plugins.state import IPluginStateStore
@@ -34,14 +33,22 @@ class PluginInfo:
 
 class PluginManager:
     """
-    Discovers plugins, tracks enabled state via IPluginStateStore, and exposes enabled actions.
+    Discovers plugins, tracks enabled state via IPluginStateStore, and exposes actions.
 
-    - `discover()` refreshes the available plugin set.
-    - `reload()` discovers and (re)activates enabled plugins (best effort).
-    - `iter_enabled_actions(api)` returns actions for enabled plugins only.
+    Deterministic host wiring contract (recommended):
+      - Pre-show (bootstrap):
+          plugin_manager.set_api(app_api)
+          plugin_manager.reload()
+      - Post-show (next tick):
+          plugin_manager.on_app_ready()
 
-    The AppAPI may be injected later via `set_api()` which supports clean DI where
-    the Qt window must exist before the API adapter can be constructed.
+    Notes:
+      - Enabled state is persisted by the injected IPluginStateStore.
+      - AppAPI may be injected later via set_api() (Qt window must exist first).
+      - Optional hooks (additive, non-breaking):
+          * on_load(api): called once per process per plugin id (pre-activate)
+          * on_ready(api): called once per activation session (post-show),
+                           reset when plugin is deactivated/disabled.
     """
 
     def __init__(
@@ -53,8 +60,18 @@ class PluginManager:
     ) -> None:
         self._api: IAppAPI | None = api
         self._state: IPluginStateStore = state
+
+        # discovered plugin instances (id -> plugin)
         self._plugins: dict[str, IPlugin] = {}
+        # active plugin instances (id -> plugin)
         self._active: dict[str, IPlugin] = {}
+
+        # Optional hook bookkeeping
+        # - on_load: once per process per plugin id
+        # - on_ready: once per activation session (cleared on deactivate)
+        self._loaded_once: set[str] = set()
+        self._ready_once: set[str] = set()
+
         self.catalog: list[PluginCatalogItem] = list(catalog or default_catalog())
 
     @property
@@ -67,18 +84,27 @@ class PluginManager:
     # ----------------------------- discovery -----------------------------
 
     def discover(self) -> None:
+        """
+        Discover plugins via entry points.
+
+        Best-effort:
+          - Any broken factory/plugin/meta access is skipped.
+        """
         self._plugins.clear()
 
-        for factory in discover_plugins():
+        for discovered in discover_plugins():
             try:
+                factory = discovered.factory
                 plugin = factory() if callable(factory) else factory
                 meta = plugin.meta
                 self._plugins[str(meta.id)] = plugin
             except Exception:
-                # discovery is best-effort; a broken plugin shouldn't break the app
                 continue
 
     def list_plugins(self) -> list[PluginInfo]:
+        """
+        Return metadata for discovered plugins only (best-effort).
+        """
         out: list[PluginInfo] = []
         for p in self._plugins.values():
             try:
@@ -101,6 +127,13 @@ class PluginManager:
         """
         Re-discover plugins and activate all enabled ones.
         Deactivates plugins that were active but are no longer enabled.
+
+        Hook ordering (best-effort):
+          1) discover()
+          2) deactivate removed/disabled plugins
+          3) for each newly-enabled plugin:
+               - on_load(api) once per process (if supported)
+               - activate(api)
         """
         self.discover()
 
@@ -118,6 +151,8 @@ class PluginManager:
                 except Exception:
                     pass
                 self._active.pop(pid, None)
+                # Allow on_ready to run again if user re-enables later.
+                self._ready_once.discard(pid)
 
         # Activate enabled plugins (best-effort).
         for pid, plugin in self._plugins.items():
@@ -125,11 +160,46 @@ class PluginManager:
                 continue
             if pid in self._active:
                 continue
+
+            # Optional: on_load runs once per process for this plugin id.
+            if pid not in self._loaded_once and isinstance(plugin, IPluginOnLoad):
+                try:
+                    plugin.on_load(api)
+                except Exception:
+                    pass
+                finally:
+                    self._loaded_once.add(pid)
+
             try:
                 plugin.activate(api)
                 self._active[pid] = plugin
             except Exception:
                 continue
+
+    def on_app_ready(self) -> None:
+        """
+        Post-show hook to be called by the host after the main window is visible.
+
+        Best-effort:
+          - Only runs for currently active plugins.
+          - Runs once per activation session per plugin id.
+          - Reset when plugin deactivates (handled in reload()).
+        """
+        api = self._api
+        if api is None:
+            return
+
+        for pid, plugin in list(self._active.items()):
+            if pid in self._ready_once:
+                continue
+
+            if isinstance(plugin, IPluginOnReady):
+                try:
+                    plugin.on_ready(api)
+                except Exception:
+                    pass
+                finally:
+                    self._ready_once.add(pid)
 
     # ----------------------------- UI helpers -----------------------------
 
@@ -151,7 +221,6 @@ class PluginManager:
     ) -> Sequence[tuple[ActionSpec, AbcCallable[[IAppAPI], None]]]:
         """
         Returns (ActionSpec, handler) for enabled plugins only.
-        The handler returned here expects an IAppAPI argument.
         """
         return self._iter_actions(api=api, enabled_only=True)
 
@@ -160,7 +229,6 @@ class PluginManager:
     ) -> Sequence[tuple[ActionSpec, AbcCallable[[IAppAPI], None]]]:
         """
         Returns (ActionSpec, handler) for all discovered plugins (enabled or not).
-        The handler returned here expects an IAppAPI argument.
         """
         return self._iter_actions(api=api, enabled_only=False)
 
@@ -179,7 +247,6 @@ class PluginManager:
                 continue
             try:
                 for spec, handler in plugin.register_actions():
-                    # Keep original plugin handler signature: handler(app_api)
                     def _run(app_api: IAppAPI, h=handler) -> None:
                         h(app_api)
 
