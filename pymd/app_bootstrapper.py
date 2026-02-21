@@ -23,7 +23,7 @@ class AppBootstrapper:
     Open/Closed: add steps later without changing splash/main window.
     """
 
-    def __init__(self, *, progress: IStartupProgress, delay_ms: int = 1000) -> None:
+    def __init__(self, *, progress: IStartupProgress, delay_ms: int = 500) -> None:
         self._progress = progress
         self._delay_ms = delay_ms  # intentional splash duration
 
