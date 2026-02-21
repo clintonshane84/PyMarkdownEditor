@@ -99,7 +99,7 @@ class PluginsDialog(QDialog):
         parent=None,
         state: IPluginStateStore,
         pip: QtPipInstaller,
-            get_installed: Callable[[], Sequence[_InstalledRowLike]],
+        get_installed: Callable[[], Sequence[_InstalledRowLike]],
         reload_plugins: Callable[[], None],
         catalog: Sequence[PluginCatalogItem] | None = None,
         auto_reload_on_toggle: bool = True,

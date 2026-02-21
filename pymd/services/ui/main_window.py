@@ -74,7 +74,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
 
     # ---- plugin settings (namespaced) ----
     def get_plugin_setting(
-            self, plugin_id: str, key: str, default: str | None = None
+        self, plugin_id: str, key: str, default: str | None = None
     ) -> str | None:
         return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
@@ -95,14 +95,14 @@ class MainWindow(QMainWindow):
     """Thin PyQt window that delegates work to injected services (DIP)."""
 
     def __init__(
-            self,
-            renderer: IMarkdownRenderer,
-            file_service: IFileService,
-            settings: ISettingsService,
-            *,
-            exporter_registry: IExporterRegistry | None = None,
-            start_path: Path | None = None,
-            app_title: str = "PyMarkdownEditor",
+        self,
+        renderer: IMarkdownRenderer,
+        file_service: IFileService,
+        settings: ISettingsService,
+        *,
+        exporter_registry: IExporterRegistry | None = None,
+        start_path: Path | None = None,
+        app_title: str = "PyMarkdownEditor",
     ) -> None:
         super().__init__()
         self.setWindowTitle(app_title)
@@ -180,7 +180,7 @@ class MainWindow(QMainWindow):
     # ----------------------- Container hook for plugins -----------------------
 
     def attach_plugins(
-            self, *, plugin_manager: object | None, plugin_installer: object | None
+        self, *, plugin_manager: object | None, plugin_installer: object | None
     ) -> None:
         """
         Ownership rule:
@@ -300,16 +300,16 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_toggle_preview)
 
         for a in (
-                self.act_bold,
-                self.act_italic,
-                self.act_code,
-                self.act_code_block,
-                self.act_h1,
-                self.act_h2,
-                self.act_list,
-                self.act_img,
-                self.act_link,
-                self.act_table,
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_code_block,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+            self.act_img,
+            self.act_link,
+            self.act_table,
         ):
             tbf.addAction(a)
 
@@ -335,14 +335,14 @@ class MainWindow(QMainWindow):
 
         editm = m.addMenu("&Edit")
         for a in (
-                self.act_bold,
-                self.act_italic,
-                self.act_code,
-                self.act_code_block,
-                self.act_h1,
-                self.act_h2,
-                self.act_list,
-                self.act_table,
+            self.act_bold,
+            self.act_italic,
+            self.act_code,
+            self.act_code_block,
+            self.act_h1,
+            self.act_h2,
+            self.act_list,
+            self.act_table,
         ):
             editm.addAction(a)
         editm.addSeparator()
@@ -383,7 +383,7 @@ class MainWindow(QMainWindow):
             return
 
         if not hasattr(self.plugin_manager, "state_store") or not hasattr(
-                self.plugin_manager, "reload"
+            self.plugin_manager, "reload"
         ):
             QMessageBox.information(
                 self,
@@ -815,8 +815,8 @@ class MainWindow(QMainWindow):
               * PYMD_DISABLE_WEBENGINE=1 is set
         """
         disable_webengine = (
-                os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
-                or "PYTEST_CURRENT_TEST" in os.environ
+            os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
+            or "PYTEST_CURRENT_TEST" in os.environ
         )
 
         if disable_webengine:

@@ -65,8 +65,8 @@ class ThemePlugin(BasePlugin, IPluginOnLoad, IPluginOnReady):
     def on_load(self, api: IAppAPI) -> None:
         # Read persisted state (defaults: enabled=true, theme=default)
         self._enabled = (
-                                api.get_plugin_setting(self.meta.id, K_ENABLED, "true") or "true"
-                        ).lower() == "true"
+            api.get_plugin_setting(self.meta.id, K_ENABLED, "true") or "true"
+        ).lower() == "true"
         self._theme_id = api.get_plugin_setting(self.meta.id, K_THEME_ID, "default") or "default"
 
     def activate(self, api: IAppAPI) -> None:

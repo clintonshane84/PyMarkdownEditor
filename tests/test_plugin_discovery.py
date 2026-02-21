@@ -23,7 +23,7 @@ class FakeEntryPoint:
         name: str,
         factory: object,
         dist: FakeDist | None = None,
-            load_raises: Exception | None = None,
+        load_raises: Exception | None = None,
     ) -> None:
         self.name = name
         self.dist = dist

@@ -248,6 +248,7 @@ class PluginManager:
                 continue
             try:
                 for spec, handler in plugin.register_actions():
+
                     def _run(app_api: IAppAPI, h=handler) -> None:
                         h(app_api)
 

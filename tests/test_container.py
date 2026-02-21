@@ -28,7 +28,7 @@ def test_container_wires_services_exporters_and_plugins(qapp, qsettings):
 
 
 def test_container_build_main_window_attaches_plugin_manager_and_installer_but_does_not_reload(
-        qapp, qsettings, monkeypatch
+    qapp, qsettings, monkeypatch
 ):
     """
     Ownership rule: bootstrapper owns plugin_manager.reload().
