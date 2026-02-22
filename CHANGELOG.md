@@ -5,16 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-<!-- insertion marker -->
-## Unreleased
+<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.0...HEAD)</small>
 
-<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.7...HEAD)</small>
+<!-- insertion marker -->
+
+## [v1.0.0](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.0) - 2026-02-21
+
+<small>[Compare with v0.8.8](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.8...v1.0.0)</small>
+
+## [v0.8.8](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.8) - 2025-11-22
+
+<small>[Compare with v0.8.7](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.7...v0.8.8)</small>
 
 ### Added
 
 - Added backport module import to pyinstaller build ([36b790f](https://github.com/clintonshane84/PyMarkdownEditor/commit/36b790fcaa66c98de49bbe958ebccbc34ac97daf) by Clinton).
 
-<!-- insertion marker -->
 ## [v0.8.7](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v0.8.7) - 2025-11-22
 
 <small>[Compare with v0.8.6](https://github.com/clintonshane84/PyMarkdownEditor/compare/v0.8.6...v0.8.7)</small>
