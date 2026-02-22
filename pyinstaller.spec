@@ -1,10 +1,23 @@
 # pyinstaller.spec
-from PyInstaller.utils.hooks import collect_submodules
+from __future__ import annotations
+
+from PyInstaller.utils.hooks import Tree, collect_submodules
 
 app_name = "PyMarkdownEditor"
 entrypoint = "pymd/__main__.py"
 
+# ---------------------------------------------------------------------------
+# Assets
+# ---------------------------------------------------------------------------
+# Include the entire assets folder so runtime lookup works in both:
+#   - dev: <repo>/assets/splash.png
+#   - pyinstaller: sys._MEIPASS/assets/splash.png
+datas = []
+datas += Tree("assets", prefix="assets")
+
+# ---------------------------------------------------------------------------
 # Hidden imports used by markdown/pygments
+# ---------------------------------------------------------------------------
 hidden = []
 hidden += collect_submodules("markdown")
 hidden += collect_submodules("pygments")
@@ -20,8 +33,10 @@ hidden += [
     "pymdownx.arithmatex",
 ]
 
+# ---------------------------------------------------------------------------
+# Excludes (reduce size + avoid optional Qt plugin drag)
+# ---------------------------------------------------------------------------
 excludes = [
-    # Exclude heavy/unused Qt modules that drag plugins with external deps
     "PyQt6.QtMultimedia",
     "PyQt6.QtMultimediaWidgets",
     "PyQt6.QtTextToSpeech",
@@ -47,12 +62,15 @@ a = Analysis(
     [entrypoint],
     pathex=["."],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={
         # Keep only platform + printsupport plugins
-        "hook-PyQt6.py": {"plugins": ["platforms", "printsupport"], "excluded_qml_plugins": "all"},
+        "hook-PyQt6.py": {
+            "plugins": ["platforms", "printsupport"],
+            "excluded_qml_plugins": "all",
+        },
     },
     excludes=excludes,
     noarchive=False,
@@ -83,5 +101,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name=app_name,  # keyword only, this sets dist/<name>/
+    name=app_name,  # dist/<name>/
 )
