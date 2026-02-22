@@ -1,7 +1,8 @@
 # pyinstaller.spec
 from __future__ import annotations
 
-from PyInstaller.utils.hooks import Tree, collect_submodules
+from PyInstaller.building.datastruct import Tree
+from PyInstaller.utils.hooks import collect_submodules
 
 app_name = "PyMarkdownEditor"
 entrypoint = "pymd/__main__.py"
