@@ -13,8 +13,6 @@ entrypoint = "pymd/__main__.py"
 # Include the entire assets folder so runtime lookup works in both:
 #   - dev: <repo>/assets/splash.png
 #   - pyinstaller: sys._MEIPASS/assets/splash.png
-datas = []
-datas.append(Tree("assets", prefix="assets"))
 
 # ---------------------------------------------------------------------------
 # Hidden imports used by markdown/pygments
@@ -100,6 +98,7 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
+    Tree("assets", prefix="assets"),
     strip=False,
     upx=False,
     name=app_name,  # dist/<name>/
