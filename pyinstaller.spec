@@ -61,7 +61,7 @@ a = Analysis(
     [entrypoint],
     pathex=["."],
     binaries=[],
-    datas=datas,
+    datas=[],
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={
