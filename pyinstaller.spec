@@ -14,7 +14,7 @@ entrypoint = "pymd/__main__.py"
 #   - dev: <repo>/assets/splash.png
 #   - pyinstaller: sys._MEIPASS/assets/splash.png
 datas = []
-datas += Tree("assets", prefix="assets")
+datas.append(Tree("assets", prefix="assets"))
 
 # ---------------------------------------------------------------------------
 # Hidden imports used by markdown/pygments
