@@ -57,6 +57,7 @@ jobs:
             Linux)
               # Onefile CLI/GUI binary (no .app on Linux)
               pyinstaller -F -n PyMarkdownEditor \
+                --add-data "assets:assets" \
                 --hidden-import backports \
                 --hidden-import backports.tarfile \
                 --hidden-import markdown \
@@ -74,6 +75,7 @@ jobs:
             macOS)
               # Produce a .app bundle on macOS (no -F)
               pyinstaller -n PyMarkdownEditor --windowed \
+                --add-data "assets:assets" \
                 --hidden-import backports \
                 --hidden-import backports.tarfile \
                 --hidden-import markdown \
