@@ -5,8 +5,8 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QByteArray, Qt
-from PyQt6.QtGui import QAction, QKeySequence, QTextCursor
+from PyQt6.QtCore import QByteArray, QEvent, Qt
+from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -21,9 +21,10 @@ from PyQt6.QtWidgets import (
     QToolBar,
 )
 
-from pymd.domain.interfaces import IFileService, IMarkdownRenderer, ISettingsService
+from pymd.domain.interfaces import IAppConfig, IFileService, IMarkdownRenderer, ISettingsService
 from pymd.domain.models import Document
 from pymd.services.exporters.base import ExporterRegistryInst, IExporterRegistry
+from pymd.services.ui.about import AboutDialog
 from pymd.services.ui.create_link import CreateLinkDialog
 from pymd.services.ui.find_replace import FindReplaceDialog
 from pymd.services.ui.plugins_dialog import InstalledPluginRow, PluginsDialog
@@ -45,7 +46,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     SettingsService internals (keeps mypy/ruff happy).
     """
 
-    def __init__(self, window: MainWindow) -> None:
+    def __init__(self, window: "MainWindow") -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -73,14 +74,13 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
         self._w._export_with(exporter)
 
     # ---- plugin settings (namespaced) ----
-    def get_plugin_setting(
-        self, plugin_id: str, key: str, default: str | None = None
-    ) -> str | None:
+    def get_plugin_setting(self, plugin_id: str, key: str, default: str | None = None) -> str | None:
         return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
     def set_plugin_setting(self, plugin_id: str, key: str, value: str) -> None:
         self._w.settings.set_raw(f"plugins/{plugin_id}/{key}", value)
 
+    # ---- theme (example capability for builtin theme plugin) ----
     def get_theme(self) -> str:
         return getattr(self._w, "_theme_id", "default")
 
@@ -96,13 +96,14 @@ class MainWindow(QMainWindow):
 
     def __init__(
         self,
+            *,
+            app_title: str = "PyMarkdownEditor",
+            config: IAppConfig,
+            exporter_registry: IExporterRegistry | None = None,
+            file_service: IFileService,
         renderer: IMarkdownRenderer,
-        file_service: IFileService,
         settings: ISettingsService,
-        *,
-        exporter_registry: IExporterRegistry | None = None,
         start_path: Path | None = None,
-        app_title: str = "PyMarkdownEditor",
     ) -> None:
         super().__init__()
         self.setWindowTitle(app_title)
@@ -111,6 +112,9 @@ class MainWindow(QMainWindow):
         self.renderer = renderer
         self.file_service = file_service
         self.settings = settings
+
+        # ✅ IMPORTANT: store config before any use
+        self.config: IAppConfig = config
 
         # Exporter registry instance (per-instance; test-friendly)
         self._exporters: IExporterRegistry = exporter_registry or ExporterRegistryInst()
@@ -132,6 +136,9 @@ class MainWindow(QMainWindow):
         self.editor.setAcceptRichText(False)
         self.editor.setTabStopDistance(4 * self.editor.fontMetrics().horizontalAdvance(" "))
 
+        # Selection-aware UX shortcuts
+        self.editor.installEventFilter(self)
+
         # Preview: prefer QWebEngineView, fallback to QTextBrowser
         self.preview = self._create_preview_widget()
 
@@ -143,7 +150,8 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(1, 1)
         self.setCentralWidget(self.splitter)
 
-        # Non-modal Find/Replace dialog
+        # Non-modal dialogs
+        self.about_dialog = AboutDialog(config=self.config, parent=self)
         self.find_dialog = FindReplaceDialog(self.editor, self)
         self.link_dialog = CreateLinkDialog(self.editor, self)
         self.table_dialog = TableDialog(self.editor, self)
@@ -159,10 +167,10 @@ class MainWindow(QMainWindow):
 
         # Restore UI state
         geo = self.settings.get_geometry()
-        if isinstance(geo, bytes | bytearray):
+        if isinstance(geo, (bytes, bytearray)):
             self.restoreGeometry(QByteArray(geo))
         split = self.settings.get_splitter()
-        if isinstance(split, bytes | bytearray):
+        if isinstance(split, (bytes, bytearray)):
             self.splitter.restoreState(QByteArray(split))
 
         # Load starting content
@@ -179,30 +187,20 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(
-        self, *, plugin_manager: object | None, plugin_installer: object | None
-    ) -> None:
+    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
         """
         Ownership rule:
           - Bootstrapper owns plugin reload() for deterministic boot.
           - MainWindow.attach_plugins() must NOT call reload().
-
-        This method only:
-          - stores references
-          - sets API on the manager (best-effort, safe)
-          - rebuilds UI actions from whatever is currently enabled/active
         """
         self.plugin_manager = plugin_manager
         self.plugin_installer = plugin_installer
 
-        # Late-bind API if supported (does NOT activate/reload)
         if self.plugin_manager is not None and hasattr(self.plugin_manager, "set_api"):
             try:
                 self.plugin_manager.set_api(self._app_api)  # type: ignore[attr-defined]
             except Exception:
                 pass
-
-        # IMPORTANT: no plugin_manager.reload() here (bootstrapper owns it)
 
         self._rebuild_plugin_actions()
 
@@ -212,59 +210,49 @@ class MainWindow(QMainWindow):
         self.exit_action = QAction("&Exit", self)
         self.exit_action.setShortcut("Ctrl+Q")
         self.exit_action.setStatusTip("Exit application")
-        self.exit_action.triggered.connect(QApplication.instance().quit)
+        self.exit_action.triggered.connect(QApplication.instance().quit)  # type: ignore[union-attr]
 
-        # Plugins manager action
         self.act_plugins = QAction("&Plugins…", self, triggered=self._show_plugins_manager)
 
-        # File actions
-        self.act_new = QAction(
-            "New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file
-        )
-        self.act_open = QAction(
-            "Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog
-        )
-        self.act_save = QAction(
-            "Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save
-        )
-        self.act_save_as = QAction(
-            "Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as
-        )
+        self.act_new = QAction("New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file)
+        self.act_open = QAction("Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog)
+        self.act_save = QAction("Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save)
+        self.act_save_as = QAction("Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as)
 
-        self.act_toggle_wrap = QAction(
-            "Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap
-        )
+        self.act_toggle_wrap = QAction("Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap)
         self.act_toggle_preview = QAction(
             "Toggle Preview", self, checkable=True, checked=True, triggered=self._toggle_preview
         )
 
-        # Export actions from registry
+        self.act_about = QAction("About…", self, triggered=self._show_about)
+
         self.export_actions: list[QAction] = []
         for exporter in self._exporters.all():
-            act = QAction(
-                exporter.label,
-                self,
-                triggered=lambda chk=False, e=exporter: self._export_with(e),
-            )
+            act = QAction(exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e))
             self.export_actions.append(act)
 
         self.recent_menu = QMenu("Open Recent", self)
 
-        # Formatting actions
-        self.act_bold = QAction("B", self, triggered=lambda: self._surround("**", "**"))
-        self.act_italic = QAction("i", self, triggered=lambda: self._surround("*", "*"))
+        self.act_bold = QAction("B", self, triggered=lambda: self._surround_selection("**", "**"))
+        self.act_bold.setShortcut("Ctrl+B")
+
+        self.act_italic = QAction("i", self, triggered=lambda: self._surround_selection("_", "_"))
+        self.act_italic.setShortcut("Ctrl+I")
+
         self.act_code = QAction("`code`", self, triggered=self._insert_inline_code)
         self.act_code_block = QAction("codeblock", self, triggered=self._insert_code_block)
-        self.act_h1 = QAction("H1", self, triggered=lambda: self._prefix_line("# "))
-        self.act_h2 = QAction("H2", self, triggered=lambda: self._prefix_line("## "))
+
+        self.act_code_block_simple = QAction(
+            "Insert Code Block", self, shortcut="Ctrl+E", triggered=self._insert_fenced_code_block_simple
+        )
+
+        self.act_h1 = QAction("H1", self, triggered=lambda: self._toggle_header_prefix("# "))
+        self.act_h2 = QAction("H2", self, triggered=lambda: self._toggle_header_prefix("## "))
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
         self.act_img = QAction("Image", self, triggered=self._select_image)
         self.act_link = QAction("Link", self, triggered=self._create_link)
-        self.act_table = QAction(
-            "Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table
-        )
+        self.act_table = QAction("Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table)
 
-        # Find/Replace actions with standard shortcuts
         self.act_find = QAction("Find", self)
         self.act_find.setShortcut(QKeySequence.StandardKey.Find)
         self.act_find.triggered.connect(self._show_find)
@@ -339,6 +327,7 @@ class MainWindow(QMainWindow):
             self.act_italic,
             self.act_code,
             self.act_code_block,
+            self.act_code_block_simple,
             self.act_h1,
             self.act_h2,
             self.act_list,
@@ -358,6 +347,9 @@ class MainWindow(QMainWindow):
         toolsm.addSeparator()
         self._plugins_menu = toolsm
 
+        helpm = m.addMenu("&Help")
+        helpm.addAction(self.act_about)
+
     def _refresh_recent_menu(self) -> None:
         self.recent_menu.clear()
         if not self.recents:
@@ -366,25 +358,227 @@ class MainWindow(QMainWindow):
             self.recent_menu.addAction(na)
             return
         for p in self.recents[:MAX_RECENTS]:
-            self.recent_menu.addAction(
-                QAction(p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x)))
-            )
+            self.recent_menu.addAction(QAction(p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x))))
+
+    # ---------------------- UX: selection-aware shortcuts ----------------------
+
+    def eventFilter(self, obj: object, event: object) -> bool:  # noqa: N802
+        """
+        Intercept editor key combos for selection-aware Markdown helpers.
+
+        - Ctrl+B: toggle **selection**
+        - Ctrl+I: toggle _selection_
+        - Ctrl+V:
+            * selection + URL in clipboard -> [selection](url)
+            * no selection + URL in clipboard -> [](url) and place cursor inside []
+        - Ctrl+E: insert fenced code block on new line
+        """
+        if obj is self.editor and isinstance(event, QKeyEvent):
+            if event.type() == QEvent.Type.KeyPress:
+                key = event.key()
+                mods = event.modifiers()
+
+                ctrl_down = bool(mods & Qt.KeyboardModifier.ControlModifier) or bool(
+                    mods & Qt.KeyboardModifier.MetaModifier
+                )
+
+                if ctrl_down and key == Qt.Key.Key_B:
+                    self._surround_selection("**", "**")
+                    return True
+
+                if ctrl_down and key == Qt.Key.Key_I:
+                    self._surround_selection("_", "_")
+                    return True
+
+                if ctrl_down and key == Qt.Key.Key_E:
+                    self._insert_fenced_code_block_simple()
+                    return True
+
+                if ctrl_down and key == Qt.Key.Key_V:
+                    if self._paste_as_markdown_link_if_applicable():
+                        return True
+                    # else let default paste happen
+
+        return super().eventFilter(obj, event)  # type: ignore[misc]
+
+    # ---------------------- UX: bold/italic toggles ----------------------
+
+    def _surround_selection(self, left: str, right: str) -> None:
+        c = self.editor.textCursor()
+        if not c.hasSelection():
+            return
+
+        raw_sel = c.selectedText()
+        sel = raw_sel.replace("\u2029", "\n")
+
+        if left == "**" and right == "**":
+            new_text = self._toggle_wrapped_text(sel, left="**", right="**")
+        elif left == "_" and right == "_":
+            new_text = self._toggle_italic_underscore(sel)
+        else:
+            new_text = self._toggle_wrapped_text(sel, left=left, right=right)
+
+        c.beginEditBlock()
+        try:
+            c.insertText(new_text)
+        finally:
+            c.endEditBlock()
+
+        self.editor.setTextCursor(c)
+
+    def _toggle_wrapped_text(self, text: str, *, left: str, right: str) -> str:
+        if text.startswith(left) and text.endswith(right) and len(text) >= len(left) + len(right):
+            return text[len(left): -len(right)]
+        return f"{left}{text}{right}"
+
+    def _toggle_italic_underscore(self, text: str) -> str:
+        if not text:
+            return "_"
+
+        if text.startswith("_") and text.endswith("_") and len(text) >= 2:
+            return text[1:-1]
+
+        stripped = text.strip()
+        if stripped.startswith("_") and stripped.endswith("_") and len(stripped) >= 2:
+            return stripped[1:-1]
+
+        return f"_{text}_"
+
+    # ---------------------- UX: header toggle ----------------------
+
+    def _toggle_header_prefix(self, prefix: str) -> None:
+        c = self.editor.textCursor()
+        doc = self.editor.document()
+        block = doc.findBlock(c.position())
+        if not block.isValid():
+            return
+
+        line_text = block.text()
+
+        existing = ""
+        i = 0
+        while i < len(line_text) and line_text[i] == "#" and i < 6:
+            i += 1
+        if i > 0 and i < len(line_text) and line_text[i] == " ":
+            existing = "#" * i + " "
+
+        replacement_prefix = "" if existing == prefix else prefix
+
+        c.beginEditBlock()
+        try:
+            line_start = block.position()
+            cur = QTextCursor(doc)
+            cur.setPosition(line_start)
+
+            if existing:
+                cur.movePosition(
+                    QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, len(existing)
+                )
+                cur.removeSelectedText()
+                cur.clearSelection()
+
+            if replacement_prefix:
+                cur.insertText(replacement_prefix)
+        finally:
+            c.endEditBlock()
+
+        self.editor.setTextCursor(c)
+
+    # ---------------------- UX: paste URL as markdown link ----------------------
+
+    def _clipboard_text(self) -> str:
+        cb = QApplication.clipboard()
+        return (cb.text() or "").strip()
+
+    def _looks_like_url(self, text: str) -> bool:
+        t = text.strip()
+        if not t:
+            return False
+        lower = t.lower()
+        return lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
+
+    def _normalize_url(self, text: str) -> str:
+        t = text.strip()
+        if t.lower().startswith("www."):
+            return "https://" + t
+        return t
+
+    def _paste_as_markdown_link_if_applicable(self) -> bool:
+        """
+        Ctrl+V smart paste:
+          - selection + URL -> [selection](url)
+          - no selection + URL -> [](url) with cursor placed inside []
+        Returns True if handled, False if caller should fall back to default paste.
+        """
+        clip = self._clipboard_text()
+        if not self._looks_like_url(clip):
+            return False
+
+        url = self._normalize_url(clip)
+
+        c = self.editor.textCursor()
+
+        # Case 1: selection exists -> [sel](url)
+        if c.hasSelection():
+            sel = c.selectedText().replace("\u2029", "\n").strip()
+            if not sel:
+                return False
+            c.beginEditBlock()
+            try:
+                c.insertText(f"[{sel}]({url})")
+            finally:
+                c.endEditBlock()
+            self.editor.setTextCursor(c)
+            return True
+
+        # Case 2: no selection -> [](url) and move cursor inside []
+        c.beginEditBlock()
+        try:
+            insert_pos = c.position()
+            md = f"[]({url})"
+            c.insertText(md)
+
+            # Move cursor to between [ and ]
+            # inserted text length is len(md); we want position: insert_pos + 1
+            c.setPosition(insert_pos + 1)
+        finally:
+            c.endEditBlock()
+
+        self.editor.setTextCursor(c)
+        return True
+
+    # ---------------------- UX: code block insert ----------------------
+
+    def _insert_fenced_code_block_simple(self) -> None:
+        c = self.editor.textCursor()
+        c.beginEditBlock()
+        try:
+            if c.position() > 0:
+                original_pos = c.position()
+                c.movePosition(c.MoveOperation.Left, c.MoveMode.KeepAnchor, 1)
+                prev = c.selectedText()
+                c.clearSelection()
+                c.setPosition(original_pos)
+                if prev not in ("\u2029", "\n"):
+                    c.insertText("\n")
+
+            c.insertText("```\n\n```\n")
+            c.movePosition(c.MoveOperation.PreviousBlock)
+            c.movePosition(c.MoveOperation.PreviousBlock)
+            c.movePosition(c.MoveOperation.EndOfBlock)
+        finally:
+            c.endEditBlock()
+
+        self.editor.setTextCursor(c)
 
     # ----------------------------- Plugins UI -----------------------------
 
     def _show_plugins_manager(self) -> None:
-        # Plugins UI is optional; show a clear message if missing wiring.
         if self.plugin_manager is None or self.plugin_installer is None:
-            QMessageBox.information(
-                self,
-                "Plugins",
-                "Plugin management is not available in this build.",
-            )
+            QMessageBox.information(self, "Plugins", "Plugin management is not available in this build.")
             return
 
-        if not hasattr(self.plugin_manager, "state_store") or not hasattr(
-            self.plugin_manager, "reload"
-        ):
+        if not hasattr(self.plugin_manager, "state_store") or not hasattr(self.plugin_manager, "reload"):
             QMessageBox.information(
                 self,
                 "Plugins",
@@ -393,22 +587,20 @@ class MainWindow(QMainWindow):
             return
 
         if self._plugins_dialog is None:
-            # mypy: ensure get_installed matches PluginsDialog's signature.
+
             def _get_installed() -> Iterable[InstalledPluginRow]:
-                # PluginManager returns PluginInfo objects (same attribute names).
                 rows = self.plugin_manager.get_installed_rows()  # type: ignore[attr-defined]
                 return rows  # type: ignore[return-value]
 
             self._plugins_dialog = PluginsDialog(
                 parent=self,
                 state=self.plugin_manager.state_store,  # type: ignore[attr-defined]
-                pip=self.plugin_installer,  # QtPipInstaller emits output(str), finished(object)
+                pip=self.plugin_installer,
                 get_installed=_get_installed,  # type: ignore[arg-type]
                 reload_plugins=self.plugin_manager.reload,  # type: ignore[attr-defined]
                 catalog=getattr(self.plugin_manager, "catalog", None),
             )
 
-        # Ensure we rebuild actions after dialog closes (covers enable/disable + reload workflows).
         if not self._plugins_dialog_hooked:
             self._plugins_dialog.finished.connect(lambda _=0: self._rebuild_plugin_actions())  # type: ignore[arg-type]
             self._plugins_dialog_hooked = True
@@ -418,15 +610,6 @@ class MainWindow(QMainWindow):
         self._plugins_dialog.activateWindow()
 
     def _rebuild_plugin_actions(self) -> None:
-        """
-        Populate Tools menu with actions from enabled plugins.
-
-        Supported manager shapes (any one):
-          - iter_enabled_actions(app_api) -> iterable[(spec, handler)]
-          - iter_actions(app_api)         -> iterable[(spec, handler)]
-          - iter_enabled_actions()        -> iterable[(spec, handler)]
-          - iter_actions()               -> iterable[(spec, handler)]
-        """
         if self._plugins_menu is None:
             return
 
@@ -488,6 +671,11 @@ class MainWindow(QMainWindow):
 
     # ----------------------------- Actions -----------------------------
 
+    def _show_about(self) -> None:
+        self.about_dialog.show()
+        self.about_dialog.raise_()
+        self.about_dialog.activateWindow()
+
     def _show_find(self) -> None:
         self.find_dialog.show_find()
 
@@ -513,37 +701,17 @@ class MainWindow(QMainWindow):
     def _insert_table(self) -> None:
         self.table_dialog.show_table_dialog()
 
-    def _surround(self, left: str, right: str) -> None:
-        c = self.editor.textCursor()
-        if not c.hasSelection():
-            return
-        sel = c.selectedText()
-        c.insertText(f"{left}{sel}{right}")
-        self.editor.setTextCursor(c)
-
     def _insert_inline_code(self) -> None:
         c = self.editor.textCursor()
         if c.hasSelection():
-            sel = c.selectedText()
+            sel = c.selectedText().replace("\u2029", "\n")
             c.insertText(f"`{sel}`")
         else:
             c.insertText("`")
         self.editor.setTextCursor(c)
 
     def _insert_code_block(self) -> None:
-        languages = [
-            "",
-            "php",
-            "javascript",
-            "typescript",
-            "java",
-            "c",
-            "cpp",
-            "csharp",
-            "python",
-            "ruby",
-            "scala",
-        ]
+        languages = ["", "php", "javascript", "typescript", "java", "c", "cpp", "csharp", "python", "ruby", "scala"]
 
         lang, ok = QInputDialog.getItem(
             self, "Code block language", "Select language (optional):", languages, 0, False
@@ -567,9 +735,8 @@ class MainWindow(QMainWindow):
                     c.insertText("\n")
 
             c.insertText(first_line + "\n\n```\n")
-
-            c.movePosition(c.MoveOperation.PreviousBlock)  # closing fence
-            c.movePosition(c.MoveOperation.PreviousBlock)  # blank line
+            c.movePosition(c.MoveOperation.PreviousBlock)
+            c.movePosition(c.MoveOperation.PreviousBlock)
             c.movePosition(c.MoveOperation.EndOfBlock)
         finally:
             c.endEditBlock()
@@ -609,6 +776,8 @@ class MainWindow(QMainWindow):
             cur.endEditBlock()
 
         self.editor.setTextCursor(c)
+
+    # ----------------------------- File ops -----------------------------
 
     def _new_file(self) -> None:
         if not self._confirm_discard():
@@ -650,9 +819,7 @@ class MainWindow(QMainWindow):
 
     def _save_as(self) -> None:
         start = str(self.doc.path) if self.doc.path else ""
-        path_str, _ = QFileDialog.getSaveFileName(
-            self, "Save As", start, "Markdown (*.md);;All files (*)"
-        )
+        path_str, _ = QFileDialog.getSaveFileName(self, "Save As", start, "Markdown (*.md);;All files (*)")
         if not path_str:
             return
         path = Path(path_str)
@@ -666,18 +833,15 @@ class MainWindow(QMainWindow):
             self.file_service.write_text_atomic(path, self.editor.toPlainText())
             self.doc.modified = False
             self._update_title()
-            self.statusBar().showMessage(f"Saved: {path}", 3000)
+            self.statusBar().showMessage(f"Saved: {path}", 3000)  # type: ignore[union-attr]
             return True
         except Exception as e:
             QMessageBox.critical(self, "Save Error", f"Failed to save file:\n{e}")
             return False
 
     def _export_with(self, exporter: Any) -> None:
-        default = (
-            self.doc.path.with_suffix(f".{exporter.file_ext}").name
-            if self.doc.path
-            else f"document.{exporter.name}"
-        )
+        default = self.doc.path.with_suffix(
+            f".{exporter.file_ext}").name if self.doc.path else f"document.{exporter.name}"
         filt = f"{exporter.name.upper()} (*.{exporter.file_ext})"
         out_str, _ = QFileDialog.getSaveFileName(self, exporter.label, default, filt)
         if not out_str:
@@ -685,11 +849,10 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)
+            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}",
+                                         3000)  # type: ignore[union-attr]
         except Exception as e:
-            QMessageBox.critical(
-                self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
-            )
+            QMessageBox.critical(self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}")
 
     def _toggle_wrap(self, on: bool) -> None:
         mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
@@ -702,7 +865,7 @@ class MainWindow(QMainWindow):
 
     def _render_preview(self) -> None:
         html = self.renderer.to_html(self.editor.toPlainText())
-        self.preview.setHtml(html)
+        self.preview.setHtml(html)  # type: ignore[attr-defined]
 
     def _on_text_changed(self) -> None:
         self.doc.modified = True
@@ -758,10 +921,16 @@ class MainWindow(QMainWindow):
     # ---------------------- Internal: preview creation ----------------------
 
     def _create_preview_widget(self) -> Any:
-        """
-        Prefer QWebEngineView (JS-capable: MathJax/KaTeX, better CSS),
-        fall back to QTextBrowser. Guard imports so the app runs without WebEngine.
-        """
+        disable_webengine = (
+                os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
+                or "PYTEST_CURRENT_TEST" in os.environ
+        )
+
+        if disable_webengine:
+            w = QTextBrowser(self)
+            w.setOpenExternalLinks(True)
+            return w
+
         try:
             from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
 
@@ -770,6 +939,8 @@ class MainWindow(QMainWindow):
             w = QTextBrowser(self)
             w.setOpenExternalLinks(True)
             return w
+
+    # ----------------------------- Themes -----------------------------
 
     def apply_theme(self, theme_id: str) -> None:
         self._theme_id = theme_id
@@ -802,33 +973,3 @@ class MainWindow(QMainWindow):
                 """
             )
             return
-
-    def _create_preview_widget(self) -> Any:
-        """
-        Prefer QWebEngineView (JS-capable: MathJax/KaTeX, better CSS),
-        fall back to QTextBrowser.
-
-        IMPORTANT:
-          - QtWebEngine can hard-abort the process in headless / pytest runs.
-          - For deterministic test stability, we disable WebEngine when:
-              * PYTEST_CURRENT_TEST is set (pytest runtime), OR
-              * PYMD_DISABLE_WEBENGINE=1 is set
-        """
-        disable_webengine = (
-            os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
-            or "PYTEST_CURRENT_TEST" in os.environ
-        )
-
-        if disable_webengine:
-            w = QTextBrowser(self)
-            w.setOpenExternalLinks(True)
-            return w
-
-        try:
-            from PyQt6.QtWebEngineWidgets import QWebEngineView  # type: ignore
-
-            return QWebEngineView(self)
-        except Exception:
-            w = QTextBrowser(self)
-            w.setOpenExternalLinks(True)
-            return w
