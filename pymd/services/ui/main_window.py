@@ -169,10 +169,10 @@ class MainWindow(QMainWindow):
 
         # Restore UI state
         geo = self.settings.get_geometry()
-        if isinstance(geo, (bytes, bytearray)):
+        if isinstance(geo, bytes | bytearray):
             self.restoreGeometry(QByteArray(geo))
         split = self.settings.get_splitter()
-        if isinstance(split, (bytes, bytearray)):
+        if isinstance(split, bytes | bytearray):
             self.splitter.restoreState(QByteArray(split))
 
         # Load starting content

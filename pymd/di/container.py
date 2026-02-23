@@ -55,7 +55,6 @@ class Container:
         dialogs: object | None = None,
         messages: object | None = None,
             *,
-            # NEW: allow explicit config overrides if you want (tests/advanced usage)
             app_config: IAppConfig | None = None,
             explicit_ini: Path | None = None,
             project_root: Path | None = None,
