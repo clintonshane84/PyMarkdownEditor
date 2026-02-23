@@ -75,7 +75,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
 
     # ---- plugin settings (namespaced) ----
     def get_plugin_setting(
-            self, plugin_id: str, key: str, default: str | None = None
+        self, plugin_id: str, key: str, default: str | None = None
     ) -> str | None:
         return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
@@ -98,11 +98,11 @@ class MainWindow(QMainWindow):
 
     def __init__(
         self,
-            *,
-            app_title: str = "PyMarkdownEditor",
-            config: IAppConfig,
-            exporter_registry: IExporterRegistry | None = None,
-            file_service: IFileService,
+        *,
+        app_title: str = "PyMarkdownEditor",
+        config: IAppConfig,
+        exporter_registry: IExporterRegistry | None = None,
+        file_service: IFileService,
         renderer: IMarkdownRenderer,
         settings: ISettingsService,
         start_path: Path | None = None,
@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
     # ----------------------- Container hook for plugins -----------------------
 
     def attach_plugins(
-            self, *, plugin_manager: object | None, plugin_installer: object | None
+        self, *, plugin_manager: object | None, plugin_installer: object | None
     ) -> None:
         """
         Ownership rule:
@@ -451,7 +451,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_wrapped_text(self, text: str, *, left: str, right: str) -> str:
         if text.startswith(left) and text.endswith(right) and len(text) >= len(left) + len(right):
-            return text[len(left): -len(right)]
+            return text[len(left) : -len(right)]
         return f"{left}{text}{right}"
 
     def _toggle_italic_underscore(self, text: str) -> str:
@@ -519,7 +519,7 @@ class MainWindow(QMainWindow):
             return False
         lower = t.lower()
         return (
-                lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
+            lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
         )
 
     def _normalize_url(self, text: str) -> str:
@@ -606,7 +606,7 @@ class MainWindow(QMainWindow):
             return
 
         if not hasattr(self.plugin_manager, "state_store") or not hasattr(
-                self.plugin_manager, "reload"
+            self.plugin_manager, "reload"
         ):
             QMessageBox.information(
                 self,
@@ -895,8 +895,7 @@ class MainWindow(QMainWindow):
         html = self.renderer.to_html(self.editor.toPlainText())
         try:
             exporter.export(html, Path(out_str))
-            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}",
-                                         3000)  # type: ignore[union-attr]
+            self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}", 3000)  # type: ignore[union-attr]
         except Exception as e:
             QMessageBox.critical(
                 self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
@@ -970,8 +969,8 @@ class MainWindow(QMainWindow):
 
     def _create_preview_widget(self) -> Any:
         disable_webengine = (
-                os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
-                or "PYTEST_CURRENT_TEST" in os.environ
+            os.environ.get("PYMD_DISABLE_WEBENGINE", "").strip() == "1"
+            or "PYTEST_CURRENT_TEST" in os.environ
         )
 
         if disable_webengine:

@@ -93,7 +93,7 @@ class AppConfig(IAppConfig):
 
 
 def build_app_config(
-        *, explicit_ini: Path | None = None, project_root: Path | None = None
+    *, explicit_ini: Path | None = None, project_root: Path | None = None
 ) -> AppConfig:
     root = project_root or _project_root_fallback()
     ini = IniConfigService(explicit_path=explicit_ini, project_root=root)

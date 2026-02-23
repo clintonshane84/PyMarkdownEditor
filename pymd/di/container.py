@@ -54,10 +54,10 @@ class Container:
         qsettings: QSettings | None = None,
         dialogs: object | None = None,
         messages: object | None = None,
-            *,
-            app_config: IAppConfig | None = None,
-            explicit_ini: Path | None = None,
-            project_root: Path | None = None,
+        *,
+        app_config: IAppConfig | None = None,
+        explicit_ini: Path | None = None,
+        project_root: Path | None = None,
     ) -> None:
         # Core services (defaults if not supplied)
         self.renderer: IMarkdownRenderer = renderer or MarkdownRenderer()
