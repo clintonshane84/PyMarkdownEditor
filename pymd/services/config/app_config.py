@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from pymd.domain.interfaces import IAppConfig
 from pymd.services.config.ini_config_service import IniConfigService
@@ -92,7 +92,9 @@ class AppConfig(IAppConfig):
         return self.ini.loaded_from
 
 
-def build_app_config(*, explicit_ini: Path | None = None, project_root: Path | None = None) -> AppConfig:
+def build_app_config(
+        *, explicit_ini: Path | None = None, project_root: Path | None = None
+) -> AppConfig:
     root = project_root or _project_root_fallback()
     ini = IniConfigService(explicit_path=explicit_ini, project_root=root)
     return AppConfig(ini=ini, project_root=root)

@@ -46,7 +46,7 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
     SettingsService internals (keeps mypy/ruff happy).
     """
 
-    def __init__(self, window: "MainWindow") -> None:
+    def __init__(self, window: MainWindow) -> None:
         self._w = window
 
     # ---- document/text ops ----
@@ -74,7 +74,9 @@ class _QtAppAPI(IAppAPI):  # type: ignore[misc]
         self._w._export_with(exporter)
 
     # ---- plugin settings (namespaced) ----
-    def get_plugin_setting(self, plugin_id: str, key: str, default: str | None = None) -> str | None:
+    def get_plugin_setting(
+            self, plugin_id: str, key: str, default: str | None = None
+    ) -> str | None:
         return self._w.settings.get_raw(f"plugins/{plugin_id}/{key}", default)
 
     def set_plugin_setting(self, plugin_id: str, key: str, value: str) -> None:
@@ -187,7 +189,9 @@ class MainWindow(QMainWindow):
 
     # ----------------------- Container hook for plugins -----------------------
 
-    def attach_plugins(self, *, plugin_manager: object | None, plugin_installer: object | None) -> None:
+    def attach_plugins(
+            self, *, plugin_manager: object | None, plugin_installer: object | None
+    ) -> None:
         """
         Ownership rule:
           - Bootstrapper owns plugin reload() for deterministic boot.
@@ -214,12 +218,22 @@ class MainWindow(QMainWindow):
 
         self.act_plugins = QAction("&Plugins…", self, triggered=self._show_plugins_manager)
 
-        self.act_new = QAction("New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file)
-        self.act_open = QAction("Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog)
-        self.act_save = QAction("Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save)
-        self.act_save_as = QAction("Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as)
+        self.act_new = QAction(
+            "New", self, shortcut=QKeySequence.StandardKey.New, triggered=self._new_file
+        )
+        self.act_open = QAction(
+            "Open…", self, shortcut=QKeySequence.StandardKey.Open, triggered=self._open_dialog
+        )
+        self.act_save = QAction(
+            "Save", self, shortcut=QKeySequence.StandardKey.Save, triggered=self._save
+        )
+        self.act_save_as = QAction(
+            "Save As…", self, shortcut=QKeySequence.StandardKey.SaveAs, triggered=self._save_as
+        )
 
-        self.act_toggle_wrap = QAction("Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap)
+        self.act_toggle_wrap = QAction(
+            "Toggle Wrap", self, checkable=True, checked=True, triggered=self._toggle_wrap
+        )
         self.act_toggle_preview = QAction(
             "Toggle Preview", self, checkable=True, checked=True, triggered=self._toggle_preview
         )
@@ -228,7 +242,9 @@ class MainWindow(QMainWindow):
 
         self.export_actions: list[QAction] = []
         for exporter in self._exporters.all():
-            act = QAction(exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e))
+            act = QAction(
+                exporter.label, self, triggered=lambda chk=False, e=exporter: self._export_with(e)
+            )
             self.export_actions.append(act)
 
         self.recent_menu = QMenu("Open Recent", self)
@@ -243,7 +259,10 @@ class MainWindow(QMainWindow):
         self.act_code_block = QAction("codeblock", self, triggered=self._insert_code_block)
 
         self.act_code_block_simple = QAction(
-            "Insert Code Block", self, shortcut="Ctrl+E", triggered=self._insert_fenced_code_block_simple
+            "Insert Code Block",
+            self,
+            shortcut="Ctrl+E",
+            triggered=self._insert_fenced_code_block_simple,
         )
 
         self.act_h1 = QAction("H1", self, triggered=lambda: self._toggle_header_prefix("# "))
@@ -251,7 +270,9 @@ class MainWindow(QMainWindow):
         self.act_list = QAction("List", self, triggered=lambda: self._prefix_line("- "))
         self.act_img = QAction("Image", self, triggered=self._select_image)
         self.act_link = QAction("Link", self, triggered=self._create_link)
-        self.act_table = QAction("Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table)
+        self.act_table = QAction(
+            "Table", self, shortcut="Ctrl+Shift+T", triggered=self._insert_table
+        )
 
         self.act_find = QAction("Find", self)
         self.act_find.setShortcut(QKeySequence.StandardKey.Find)
@@ -358,11 +379,13 @@ class MainWindow(QMainWindow):
             self.recent_menu.addAction(na)
             return
         for p in self.recents[:MAX_RECENTS]:
-            self.recent_menu.addAction(QAction(p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x))))
+            self.recent_menu.addAction(
+                QAction(p, self, triggered=lambda chk=False, x=p: self._open_path(Path(x)))
+            )
 
     # ---------------------- UX: selection-aware shortcuts ----------------------
 
-    def eventFilter(self, obj: object, event: object) -> bool:  # noqa: N802
+    def eventFilter(self, obj: object, event: object) -> bool:
         """
         Intercept editor key combos for selection-aware Markdown helpers.
 
@@ -495,7 +518,9 @@ class MainWindow(QMainWindow):
         if not t:
             return False
         lower = t.lower()
-        return lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
+        return (
+                lower.startswith("http://") or lower.startswith("https://") or lower.startswith("www.")
+        )
 
     def _normalize_url(self, text: str) -> str:
         t = text.strip()
@@ -575,10 +600,14 @@ class MainWindow(QMainWindow):
 
     def _show_plugins_manager(self) -> None:
         if self.plugin_manager is None or self.plugin_installer is None:
-            QMessageBox.information(self, "Plugins", "Plugin management is not available in this build.")
+            QMessageBox.information(
+                self, "Plugins", "Plugin management is not available in this build."
+            )
             return
 
-        if not hasattr(self.plugin_manager, "state_store") or not hasattr(self.plugin_manager, "reload"):
+        if not hasattr(self.plugin_manager, "state_store") or not hasattr(
+                self.plugin_manager, "reload"
+        ):
             QMessageBox.information(
                 self,
                 "Plugins",
@@ -711,7 +740,19 @@ class MainWindow(QMainWindow):
         self.editor.setTextCursor(c)
 
     def _insert_code_block(self) -> None:
-        languages = ["", "php", "javascript", "typescript", "java", "c", "cpp", "csharp", "python", "ruby", "scala"]
+        languages = [
+            "",
+            "php",
+            "javascript",
+            "typescript",
+            "java",
+            "c",
+            "cpp",
+            "csharp",
+            "python",
+            "ruby",
+            "scala",
+        ]
 
         lang, ok = QInputDialog.getItem(
             self, "Code block language", "Select language (optional):", languages, 0, False
@@ -819,7 +860,9 @@ class MainWindow(QMainWindow):
 
     def _save_as(self) -> None:
         start = str(self.doc.path) if self.doc.path else ""
-        path_str, _ = QFileDialog.getSaveFileName(self, "Save As", start, "Markdown (*.md);;All files (*)")
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Save As", start, "Markdown (*.md);;All files (*)"
+        )
         if not path_str:
             return
         path = Path(path_str)
@@ -840,8 +883,11 @@ class MainWindow(QMainWindow):
             return False
 
     def _export_with(self, exporter: Any) -> None:
-        default = self.doc.path.with_suffix(
-            f".{exporter.file_ext}").name if self.doc.path else f"document.{exporter.name}"
+        default = (
+            self.doc.path.with_suffix(f".{exporter.file_ext}").name
+            if self.doc.path
+            else f"document.{exporter.name}"
+        )
         filt = f"{exporter.name.upper()} (*.{exporter.file_ext})"
         out_str, _ = QFileDialog.getSaveFileName(self, exporter.label, default, filt)
         if not out_str:
@@ -852,7 +898,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Exported {exporter.name.upper()}: {out_str}",
                                          3000)  # type: ignore[union-attr]
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}")
+            QMessageBox.critical(
+                self, "Export Error", f"Failed to export {exporter.name.upper()}:\n{e}"
+            )
 
     def _toggle_wrap(self, on: bool) -> None:
         mode = QTextEdit.LineWrapMode.WidgetWidth if on else QTextEdit.LineWrapMode.NoWrap
