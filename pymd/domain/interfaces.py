@@ -112,3 +112,12 @@ class IConfigService(Protocol):
 
     # Convenience for very common keys
     def app_version(self) -> str: ...
+
+
+class IAppConfig(IConfigService, Protocol):
+    """
+    Full config contract for the application.
+    Must include all public IniConfigService methods + app version.
+    """
+
+    def get_version(self) -> str: ...
