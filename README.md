@@ -12,34 +12,71 @@ Owner-led governance; contributions welcome (see CONTRIBUTING).
 
 ### 📝 Live Preview
 
-* Debounced, side-by-side Markdown preview while you type.
-* Dark-mode friendly CSS.
-* Optional Qt WebEngine rendering (automatically disabled in tests/headless runs).
+- Debounced, side-by-side Markdown preview while you type.
+- Dark-mode friendly styling.
+- Optional Qt WebEngine rendering (automatically disabled in tests/headless runs).
 
 ### 🧠 Markdown Rendering
 
 Powered by:
 
-* `python-markdown`
-* Extensions:
-
-    * `extra`
-    * `fenced_code`
-    * `codehilite`
-    * `toc`
-    * `sane_lists`
-    * `smarty`
-* Optional:
-
-    * `pymdown-extensions` (e.g. math/LaTeX via `arithmatex`)
+- `python-markdown`
+- Extensions:
+    - `extra`
+    - `fenced_code`
+    - `codehilite`
+    - `toc`
+    - `sane_lists`
+    - `smarty`
+- Optional:
+    - `pymdown-extensions` (e.g. math/LaTeX via `arithmatex`)
 
 ### 📁 Robust File Handling
 
-* Open/Save `.md` files
-* Atomic writes via `QSaveFile`
-* UTF-8 encoding
-* Drag & drop support
-* Recent files persisted via `QSettings`
+- Open/Save `.md` files
+- Atomic writes via `QSaveFile`
+- UTF-8 encoding
+- Drag & drop support
+- Recent files persisted via `QSettings`
+
+---
+
+## 🧠 UX Improvements (Smart Markdown Editing)
+
+PyMarkdownEditor includes selection-aware behaviour for common Markdown actions.
+
+### ✅ Smart Bold / Italic Toggle (Selection Highlighting)
+
+When text is selected, **Bold** and *Italic* behave as toggles:
+
+- If the selection is **not** already wrapped, it is wrapped with the correct Markdown.
+- If the selection **is already wrapped**, the wrapping is removed.
+
+Examples:
+
+- Selecting `hello` then pressing **Ctrl+B** → `**hello**`
+- Selecting `**hello**` then pressing **Ctrl+B** → `hello`
+- Selecting `hello` then pressing **Ctrl+I** → `_hello_`
+- Selecting `_hello_` then pressing **Ctrl+I** → `hello`
+
+### 🔗 Smart Paste: URLs become Markdown links
+
+When you paste a URL (**Ctrl+V**) the editor detects whether you have selected text:
+
+- **No selection + URL in clipboard**
+    - Inserts: `[](https://example.com)`
+    - Cursor is placed inside the `[]` so you can type the label immediately.
+
+- **Selection + URL in clipboard**
+    - Converts to: `[selected text](https://example.com)`
+
+This makes link creation fast without opening a dialog.
+
+### ⌨ New Shortcuts
+
+- **Ctrl+B** → toggle bold on selected text (`**...**`)
+- **Ctrl+I** → toggle italic on selected text (`_..._`)
+- **Ctrl+E** → insert a new fenced code block on a new line
 
 ---
 
@@ -61,9 +98,9 @@ Uses `QWebEngineView` for closer WYSIWYG output.
 
 Automatically disabled in:
 
-* pytest
-* headless environments
-* when `PYMD_DISABLE_WEBENGINE=1`
+- pytest
+- headless environments
+- when `PYMD_DISABLE_WEBENGINE=1`
 
 ---
 
@@ -88,7 +125,7 @@ Recommended host wiring:
 plugin_manager.set_api(app_api)
 plugin_manager.reload()
 plugin_manager.on_app_ready()
-```
+````
 
 Hooks (optional):
 
@@ -126,7 +163,7 @@ SOLID-leaning, layered design:
 * Strategy-based exporters
 * Explicit plugin lifecycle
 * Deterministic startup
-* Test-safe QtWebEngine behavior
+* Test-safe QtWebEngine behaviour
 
 ---
 
@@ -196,22 +233,23 @@ Optional (WebEngine PDF export):
 
 ### Formatting
 
-* **B** → Bold
-* *i* → Italic
-* `code`
+* **Ctrl+B** → Bold toggle (selection-aware)
+* **Ctrl+I** → Italic toggle (selection-aware)
+* `code` (inline)
 * `# H1`
 * `## H2`
 * `- list`
 
 ### Insert
 
-* Insert link
+* **Ctrl+E** → Insert fenced code block on a new line
+* Insert link (dialog)
 * Insert image
 * Insert table
 * Find / Replace
 * About dialog
 
-All actions exposed via toolbar + menus.
+All actions are exposed via toolbar + menus.
 
 ---
 
@@ -229,6 +267,7 @@ All actions exposed via toolbar + menus.
 │   │   ├── state.py
 │   │   └── builtin/
 │   ├── services/
+│   │   ├── config/
 │   │   ├── exporters/
 │   │   ├── file_service.py
 │   │   ├── markdown_renderer.py
@@ -343,7 +382,7 @@ Triggered by version tags.
 
 ### Missing pymdownx
 
-```
+```bash
 pip install pymdown-extensions
 ```
 
