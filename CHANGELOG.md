@@ -5,9 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-<small>[Compare with latest](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.0...HEAD)</small>
-
 <!-- insertion marker -->
+
+## [v1.1.1](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.1.1) - 2026-02-24
+
+<small>[Compare with v1.1.0](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.1.0...v1.1.1)</small>
+
+## [v1.1.0](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.1.0) - 2026-02-24
+
+<small>[Compare with v1.0.5](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.5...v1.1.0)</small>
+
+### Added
+
+- Add new higher level IAppConfig module to include IniConfigService and add get_version fetch from version
+  file ([b97625e](https://github.com/clintonshane84/PyMarkdownEditor/commit/b97625e171166139c7aca42f13b1d84dbe7d60dd) by
+  Clinton).
+
+## [v1.0.5](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.5) - 2026-02-22
+
+<small>[Compare with v1.0.4](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.4...v1.0.5)</small>
+
+### Fixed
+
+- fix: Restore Analysis parameter back
+  to =[] ([1bb0484](https://github.com/clintonshane84/PyMarkdownEditor/commit/1bb0484beb70cf350a79dcf5b7f58f5085cbbda6)
+  by Clinton).
+
+## [v1.0.4](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.4) - 2026-02-22
+
+<small>[Compare with v1.0.3](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.3...v1.0.4)</small>
+
+### Fixed
+
+- fix: Moved Tree("asset", "asset") over to COLLECT() becuase Analysis() doesnt support
+  it ([b153e22](https://github.com/clintonshane84/PyMarkdownEditor/commit/b153e228120dc6654ec0e285f7b4737313dd171a) by
+  Clinton).
+
+## [v1.0.3](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.3) - 2026-02-22
+
+<small>[Compare with v1.0.2](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.2...v1.0.3)</small>
+
+### Fixed
+
+- fix: Use append instead of += for datas variable in
+  pyinstaller.spec ([c8d423b](https://github.com/clintonshane84/PyMarkdownEditor/commit/c8d423b767ea8c52a84c933e469c9659db7b9893)
+  by Clinton).
+
+## [v1.0.2](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.2) - 2026-02-22
+
+<small>[Compare with v1.0.1](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.1...v1.0.2)</small>
+
+### Fixed
+
+- fix: Update import for Tree in pyinstaller.spec for windows binary
+  build ([256f40a](https://github.com/clintonshane84/PyMarkdownEditor/commit/256f40a260848ba085768f59b03d74ee206f95a4)
+  by Clinton).
+
+## [v1.0.1](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.1) - 2026-02-22
+
+<small>[Compare with v1.0.0](https://github.com/clintonshane84/PyMarkdownEditor/compare/v1.0.0...v1.0.1)</small>
 
 ## [v1.0.0](https://github.com/clintonshane84/PyMarkdownEditor/releases/tag/v1.0.0) - 2026-02-21
 
@@ -213,3 +269,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Added missing screenshot for README and updated dev-requirements.txt file with latest libraries used in project development ([5dd8e15](https://github.com/clintonshane84/PyMarkdownEditor/commit/5dd8e15fb4179eaf3ac6ca93b8423cc32891fa61) by Clinton).
 - Added a README.md file for the project ([656056f](https://github.com/clintonshane84/PyMarkdownEditor/commit/656056fe72e6f4642dfbf3af6af9bc41f836753f) by Clinton).
+
