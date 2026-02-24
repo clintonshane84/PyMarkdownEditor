@@ -45,6 +45,7 @@ def test_container_build_main_window_attaches_plugins_and_does_not_reload(
 
     # Fail fast if Container tries to reload during build_main_window()
     if c.plugin_manager is not None and hasattr(c.plugin_manager, "reload"):
+
         def boom_reload(*_a: Any, **_k: Any) -> None:
             raise AssertionError(
                 "Container must not call plugin_manager.reload(); bootstrapper owns reload."
@@ -55,6 +56,7 @@ def test_container_build_main_window_attaches_plugins_and_does_not_reload(
     # Spy that API was set (Container may call set_api directly, and/or via window.attach_plugins)
     api_seen: dict[str, Any] = {"api": None}
     if c.plugin_manager is not None and hasattr(c.plugin_manager, "set_api"):
+
         def spy_set_api(api: Any) -> None:
             api_seen["api"] = api
 

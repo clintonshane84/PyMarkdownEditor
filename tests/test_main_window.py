@@ -345,7 +345,7 @@ def test_paste_as_markdown_link_with_selection(monkeypatch, window: MainWindow, 
 
 
 def test_paste_as_markdown_link_no_selection_places_cursor_inside_brackets(
-        monkeypatch, window: MainWindow, qapp
+    monkeypatch, window: MainWindow, qapp
 ):
     cb = qapp.clipboard()
     cb.setText("www.example.com")
