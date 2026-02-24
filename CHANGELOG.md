@@ -269,4 +269,3 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Added missing screenshot for README and updated dev-requirements.txt file with latest libraries used in project development ([5dd8e15](https://github.com/clintonshane84/PyMarkdownEditor/commit/5dd8e15fb4179eaf3ac6ca93b8423cc32891fa61) by Clinton).
 - Added a README.md file for the project ([656056f](https://github.com/clintonshane84/PyMarkdownEditor/commit/656056fe72e6f4642dfbf3af6af9bc41f836753f) by Clinton).
-
