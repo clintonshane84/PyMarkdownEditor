@@ -61,7 +61,9 @@ a = Analysis(
     [entrypoint],
     pathex=["."],
     binaries=[],
-    datas=[],
+    datas=[
+        ("version", "."),  # include repo-root version file into MEIPASS root
+    ],
     hiddenimports=hidden,
     hookspath=[],
     hooksconfig={

@@ -76,6 +76,7 @@ jobs:
               # Produce a .app bundle on macOS (no -F)
               pyinstaller -n PyMarkdownEditor --windowed \
                 --add-data "assets:assets" \
+                --add-data "version:version" \
                 --hidden-import backports \
                 --hidden-import backports.tarfile \
                 --hidden-import markdown \
