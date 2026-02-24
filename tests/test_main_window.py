@@ -344,7 +344,9 @@ def test_paste_as_markdown_link_with_selection(monkeypatch, window: MainWindow, 
     assert window.editor.toPlainText() == "[Click here](https://example.com)"
 
 
-def test_paste_as_markdown_link_no_selection_places_cursor_inside_brackets(monkeypatch, window: MainWindow, qapp):
+def test_paste_as_markdown_link_no_selection_places_cursor_inside_brackets(
+        monkeypatch, window: MainWindow, qapp
+):
     cb = qapp.clipboard()
     cb.setText("www.example.com")
 
@@ -475,7 +477,9 @@ def test_rebuild_plugin_actions_adds_actions_to_tools_menu(window: MainWindow):
 
 def test_show_plugins_manager_unavailable_shows_info(monkeypatch, window: MainWindow):
     called = {"n": 0}
-    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *a, **k: called.__setitem__("n", called["n"] + 1)
+    )
 
     window.attach_plugins(plugin_manager=None, plugin_installer=None)
     window._show_plugins_manager()
