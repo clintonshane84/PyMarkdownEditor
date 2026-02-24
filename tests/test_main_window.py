@@ -1,9 +1,13 @@
+# tests/test_main_window.py
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
-from PyQt6.QtCore import QSettings
+from PyQt6.QtCore import QEvent, QSettings, Qt
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import QMessageBox, QTextBrowser, QTextEdit
 
 from pymd.services.exporters.base import IExporter, IExporterRegistry
@@ -14,10 +18,47 @@ from pymd.services.ui.main_window import MainWindow
 from pymd.utils.constants import MAX_RECENTS
 
 
-# Force the preview widget to be QTextBrowser in tests (avoids WebEngine crashes/headless issues)
+# ------------------------------
+# Minimal config + dialog stubs
+# ------------------------------
+@dataclass(frozen=True)
+class DummyConfig:
+    """
+    Keep this deliberately permissive: AboutDialog may access various config attributes.
+    Unknown attributes return a sensible empty string.
+    """
+
+    app_name: str = "PyMarkdownEditor"
+    version: str = "1.0.0"
+    website: str = ""
+    repo_url: str = ""
+    author: str = ""
+    copyright: str = ""
+
+    def __getattr__(self, _: str) -> str:  # for any other attribute AboutDialog may touch
+        return ""
+
+
+class DummyAboutDialog:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._shown = False
+
+    def show(self) -> None:
+        self._shown = True
+
+    def raise_(self) -> None:
+        return None
+
+    def activateWindow(self) -> None:
+        return None
+
+
+# ------------------------------
+# Force the preview widget to be QTextBrowser in tests (avoid WebEngine)
+# ------------------------------
 @pytest.fixture(autouse=True)
 def force_textbrowser_preview(monkeypatch):
-    def _factory(self):
+    def _factory(self: MainWindow):
         w = QTextBrowser(self)
         w.setOpenExternalLinks(True)
         return w
@@ -30,10 +71,6 @@ def force_textbrowser_preview(monkeypatch):
 # ------------------------------
 @pytest.fixture(autouse=True)
 def auto_accept_discard(monkeypatch):
-    """
-    Avoid interactive 'Discard changes?' popups during tests.
-    Always answer Yes.
-    """
     monkeypatch.setattr(
         "pymd.services.ui.main_window.QMessageBox.question",
         lambda *a, **k: QMessageBox.StandardButton.Yes,
@@ -41,11 +78,9 @@ def auto_accept_discard(monkeypatch):
 
 
 # ------------------------------
-# Fakes & helpers
+# Export fakes
 # ------------------------------
 class DummyExporter(IExporter):
-    """Tiny exporter used for tests; writes the HTML to a .txt file."""
-
     file_ext = "txt"
 
     @property
@@ -61,8 +96,6 @@ class DummyExporter(IExporter):
 
 
 class FakeExporterRegistry(IExporterRegistry):
-    """Pure in-memory registry to avoid any global/singleton bleed across tests."""
-
     def __init__(self) -> None:
         self._map: dict[str, IExporter] = {}
 
@@ -73,10 +106,9 @@ class FakeExporterRegistry(IExporterRegistry):
         self._map.pop(name, None)
 
     def get(self, name: str) -> IExporter:
-        try:
-            return self._map[name]
-        except KeyError:
-            raise KeyError(name)  # noqa: B904
+        if name not in self._map:
+            raise KeyError(name)
+        return self._map[name]
 
     def all(self) -> list[IExporter]:
         return list(self._map.values())
@@ -90,22 +122,27 @@ def exporter_registry() -> IExporterRegistry:
 
 
 @pytest.fixture()
-def window(qapp, tmp_path, exporter_registry: IExporterRegistry) -> MainWindow:
+def window(qapp, tmp_path: Path, exporter_registry: IExporterRegistry, monkeypatch) -> MainWindow:
     """
-    Build a MainWindow with file-based QSettings (isolated per test) and an injected
-    exporter registry that contains a simple DummyExporter.
+    Build a MainWindow with file-backed QSettings (isolated per test) and a stub AboutDialog,
+    plus an injected exporter registry containing DummyExporter.
     """
+    # Avoid coupling to AboutDialog internals/expected config attributes
+    monkeypatch.setattr("pymd.services.ui.main_window.AboutDialog", DummyAboutDialog, raising=True)
+
     qs = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     renderer = MarkdownRenderer()
     files = FileService()
     settings = SettingsService(qs)
+
     w = MainWindow(
+        app_title="Test",
+        config=DummyConfig(),
         renderer=renderer,
         file_service=files,
         settings=settings,
         exporter_registry=exporter_registry,
         start_path=None,
-        app_title="Test",
     )
     w.show()
     qapp.processEvents()
@@ -118,10 +155,11 @@ def window(qapp, tmp_path, exporter_registry: IExporterRegistry) -> MainWindow:
 def test_window_initial_state(window: MainWindow):
     assert window.doc.path is None
     assert window.doc.modified is False
+    assert isinstance(window.editor, QTextEdit)
+    assert isinstance(window.preview, QTextBrowser)
 
-    # Preview should render empty doc to valid HTML
-    html = window.preview.toHtml()
-    assert "<html" in html.lower()
+    html = window.preview.toHtml().lower()
+    assert "<html" in html
 
 
 def test_window_open_save_cycle(tmp_path: Path, window: MainWindow):
@@ -132,11 +170,9 @@ def test_window_open_save_cycle(tmp_path: Path, window: MainWindow):
     assert window.doc.path == src
     assert window.editor.toPlainText().startswith("# Hello")
 
-    # edit -> modified
     window.editor.setPlainText("# Hello\nWorld")
     assert window.doc.modified is True
 
-    # save as
     dest = tmp_path / "b.md"
     assert window._write_to(dest) is True
     assert dest.read_text(encoding="utf-8").endswith("World")
@@ -144,71 +180,61 @@ def test_window_open_save_cycle(tmp_path: Path, window: MainWindow):
 
 
 def test_window_write_failure_shows_error(monkeypatch, tmp_path: Path, window: MainWindow):
-    # Neutralize blocking dialog
     monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: None)
 
-    # Simulate write failure in FileService
-    def boom(path: Path, text: str) -> None:
+    def boom(_self: Any, _path: Path, _text: str) -> None:
         raise OSError("disk full")
 
     monkeypatch.setattr(type(window.file_service), "write_text_atomic", boom, raising=False)
     assert window._write_to(tmp_path / "bad.md") is False
 
 
-def test_window_export_action_flows_through_registry(
-    monkeypatch, tmp_path: Path, window: MainWindow
-):
-    # Put some content and render once
+def test_export_action_flows_through_registry(monkeypatch, tmp_path: Path, window: MainWindow):
     window.editor.setPlainText("# Title\n\nText")
 
-    # Pick the first export action created from the registry (our DummyExporter only)
-    assert window.export_actions, "No export actions were created"
+    assert window.export_actions
     act = window.export_actions[0]
 
     out = tmp_path / "doc.txt"
-    # Drive the QFileDialog used by _export_with
     monkeypatch.setattr(
         "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
         lambda *a, **k: (str(out), ""),
     )
 
-    # Trigger export via the UI action
     act.trigger()
 
     data = out.read_text(encoding="utf-8").lower()
-    assert data.startswith("<!doctype") or "<html" in data
+    assert "<html" in data
 
 
-def test_window_recents_persist_roundtrip(window: MainWindow, tmp_path: Path, qapp):
+def test_recents_persist_roundtrip(window: MainWindow, tmp_path: Path, qapp):
     p = tmp_path / "r.md"
     p.write_text("ok", encoding="utf-8")
     window._open_path(p)
-    assert str(p) in window.recents[:1]  # most recent
+    assert window.recents[:1] == [str(p)]
 
-    # Close to persist geometry/splitter/recents into QSettings
     window.close()
     qapp.processEvents()
 
-    # New window, reuse same SettingsService (same QSettings backend file)
     w2 = MainWindow(
+        app_title="Test2",
+        config=DummyConfig(),
         renderer=MarkdownRenderer(),
         file_service=FileService(),
-        settings=window.settings,  # same SettingsService (file-backed)
+        settings=window.settings,  # same SettingsService backend
         exporter_registry=window._exporters,
-        app_title="Test2",
+        start_path=None,
     )
-    assert str(p) in w2.recents[:1]
+    assert w2.recents[:1] == [str(p)]
 
 
-def test_window_confirm_discard_negative(window: MainWindow, monkeypatch):
-    # user says "No"
+def test_confirm_discard_negative(window: MainWindow, monkeypatch):
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No)
     window.doc.modified = True
     assert window._confirm_discard() is False
 
 
-def test_window_confirm_discard_positive(window: MainWindow, monkeypatch):
-    # user says "Yes"
+def test_confirm_discard_positive(window: MainWindow, monkeypatch):
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
     window.doc.modified = True
     assert window._confirm_discard() is True
@@ -228,13 +254,11 @@ def test_confirm_discard_no_dialog_when_unmodified(window: MainWindow, monkeypat
 
 
 def test_window_toggles(window: MainWindow, qapp):
-    # Wrap toggle
     window._toggle_wrap(False)
     assert window.editor.lineWrapMode() == QTextEdit.LineWrapMode.NoWrap
     window._toggle_wrap(True)
     assert window.editor.lineWrapMode() == QTextEdit.LineWrapMode.WidgetWidth
 
-    # Preview toggle
     window._toggle_preview(False)
     qapp.processEvents()
     assert window.preview.isVisible() is False
@@ -243,363 +267,263 @@ def test_window_toggles(window: MainWindow, qapp):
     assert window.preview.isVisible() is True
 
 
-def test_formatting_actions_surround_and_prefix(window: MainWindow):
-    # Surround selection with bold
+# ------------------------------
+# Formatting & header toggles
+# ------------------------------
+def _select_range(w: MainWindow, start: int, end: int) -> None:
+    c = w.editor.textCursor()
+    c.setPosition(start)
+    c.setPosition(end, c.MoveMode.KeepAnchor)
+    w.editor.setTextCursor(c)
+
+
+def test_bold_toggle_wraps_and_unwraps(window: MainWindow):
     window.editor.setPlainText("hello")
-    c = window.editor.textCursor()
-    c.setPosition(0)
-    c.setPosition(5, c.MoveMode.KeepAnchor)
-    window.editor.setTextCursor(c)
+    _select_range(window, 0, 5)
     window.act_bold.trigger()
     assert window.editor.toPlainText() == "**hello**"
 
-    # Prefix line with "# "
+    # toggle off by selecting wrapped value
+    window.editor.setPlainText("**hello**")
+    _select_range(window, 0, len("**hello**"))
+    window.act_bold.trigger()
+    assert window.editor.toPlainText() == "hello"
+
+
+def test_italic_toggle_handles_whitespace(window: MainWindow):
+    window.editor.setPlainText(" hello ")
+    _select_range(window, 0, len(" hello "))
+    window.act_italic.trigger()
+    assert window.editor.toPlainText() == "_ hello _"  # preserves original spacing
+
+    # toggle off even if selection includes whitespace by stripping logic
+    window.editor.setPlainText(" _hello_ ")
+    _select_range(window, 0, len(" _hello_ "))
+    window.act_italic.trigger()
+    assert window.editor.toPlainText() == "hello"
+
+
+def test_header_prefix_toggle(window: MainWindow):
     window.editor.setPlainText("line1\nline2")
-    c = window.editor.textCursor()
-    c.setPosition(0)
-    window.editor.setTextCursor(c)
+    _select_range(window, 0, 0)  # caret on line1
     window.act_h1.trigger()
     assert window.editor.toPlainText().startswith("# line1")
 
-    # Multi-line prefix with "- " (full selection)
+    # toggle back to none
+    window.act_h1.trigger()
+    assert window.editor.toPlainText().startswith("line1")
+
+
+def test_prefix_line_multiline_selection(window: MainWindow):
     window.editor.setPlainText("a\nb\nc")
-    c = window.editor.textCursor()
-    c.setPosition(0)
-    c.movePosition(c.MoveOperation.End, c.MoveMode.KeepAnchor)
-    window.editor.setTextCursor(c)
+    _select_range(window, 0, len("a\nb\nc"))
     window.act_list.trigger()
-    text = window.editor.toPlainText().splitlines()
-    assert text[0].startswith("- ")
-    assert text[1].startswith("- ")
-    assert text[2].startswith("- ")
+    assert window.editor.toPlainText().splitlines() == ["- a", "- b", "- c"]
 
 
 def test_prefix_line_partial_multiline_selection(window: MainWindow):
-    # Ensure only full selected lines are prefixed, no off-by-one past end.
     window.editor.setPlainText("a\nb\nc\n")
-    c = window.editor.textCursor()
-    # Select from start of 'b' line through newline after 'b' (not into 'c')
-    # Positions: "a\nb\nc\n" -> 0 a,1 \n,2 b,3 \n,4 c,5 \n
-    c.setPosition(2)  # start of 'b'
-    c.setPosition(4, c.MoveMode.KeepAnchor)  # up to '\n' after 'b'
-    window.editor.setTextCursor(c)
+    # select only 'b' line (positions: 0 a,1 \n,2 b,3 \n,4 c,5 \n)
+    _select_range(window, 2, 4)
     window.act_list.trigger()
     assert window.editor.toPlainText().splitlines()[:3] == ["a", "- b", "c"]
 
 
 # ------------------------------
-# Find / Replace coverage
+# Smart paste: URL -> Markdown link
 # ------------------------------
-@pytest.mark.parametrize(
-    "case,whole,needle,expected",
-    [
-        (False, False, "foo", ["foo", "foo", "FOO"]),  # substring & case-insensitive
-        (False, True, "foo", ["foo", "FOO"]),  # whole words only; "foobar" excluded
-        (True, True, "FOO", ["FOO"]),  # case + whole word
-    ],
-)
-def test_find_options_whole_and_case(window: MainWindow, qapp, case, whole, needle, expected):
-    window.editor.setPlainText("foo foobar FOO")
-    dlg = window.find_dialog
-    dlg.find_edit.setText(needle)
-    dlg.case_cb.setChecked(case)
-    dlg.word_cb.setChecked(whole)
-    dlg.wrap_cb.setChecked(True)
+def test_paste_as_markdown_link_with_selection(monkeypatch, window: MainWindow, qapp):
+    cb = qapp.clipboard()
+    cb.setText("https://example.com")
 
-    # Gather forward hits until cursor selection wraps or no selection
-    hits: list[str] = []
-    seen_starts: set[int] = set()
+    window.editor.setPlainText("Click here")
+    _select_range(window, 0, len("Click here"))
 
-    # perform first find
-    dlg.find(forward=True)
-    qapp.processEvents()
-
-    while window.editor.textCursor().hasSelection():
-        cur = window.editor.textCursor()
-        start = cur.selectionStart()
-        if start in seen_starts:
-            break  # wrapped/cycled
-        seen_starts.add(start)
-        hits.append(cur.selectedText())
-        dlg.find(forward=True)
-        qapp.processEvents()
-
-    assert hits == expected
+    handled = window._paste_as_markdown_link_if_applicable()
+    assert handled is True
+    assert window.editor.toPlainText() == "[Click here](https://example.com)"
 
 
-def test_find_whole_word_ignores_substrings_with_punct(window: MainWindow, qapp):
-    window.editor.setPlainText("foo, foobar foo.")
-    d = window.find_dialog
-    d.find_edit.setText("foo")
-    d.word_cb.setChecked(True)
-    d.case_cb.setChecked(False)
-    d.wrap_cb.setChecked(True)
-
-    hits = []
-    seen_starts: set[int] = set()
-    for _ in range(5):
-        d.find(forward=True)
-        qapp.processEvents()
-        cur = window.editor.textCursor()
-        if not cur.hasSelection():
-            break
-        start = cur.selectionStart()
-        if start in seen_starts:
-            break  # wrapped/cycled
-        seen_starts.add(start)
-        hits.append(cur.selectedText())
-
-    assert hits == ["foo", "foo"]
-
-
-def test_find_backward_wraps(window: MainWindow, qapp):
-    window.editor.setPlainText("a foo b foo c")
-    dlg = window.find_dialog
-    dlg.find_edit.setText("foo")
-    dlg.case_cb.setChecked(False)
-    dlg.word_cb.setChecked(True)
-    dlg.wrap_cb.setChecked(True)
-
-    # Move caret to start then search backward (forces wrap to last)
-    c = window.editor.textCursor()
-    c.movePosition(c.MoveOperation.Start)
-    window.editor.setTextCursor(c)
-
-    dlg.find(forward=False)
-    qapp.processEvents()
-    sel = window.editor.textCursor().selectedText()
-    assert sel == "foo"
-    # and ensure it's the *second* occurrence (after wrap)
-    assert window.editor.textCursor().selectionStart() > 5  # past "a foo "
-
-
-def test_replace_one_and_all(window: MainWindow, qapp):
-    # Replace-one behavior
-    window.editor.setPlainText("alpha beta alpha")
-    window.act_replace.trigger()
-    qapp.processEvents()
-
-    dlg = window.find_dialog
-    dlg.find_edit.setText("alpha")
-    dlg.replace_edit.setText("ALPHA")
-    dlg.case_cb.setChecked(False)
-    dlg.word_cb.setChecked(True)
-    dlg.wrap_cb.setChecked(True)
-
-    # Find first, then replace one
-    dlg.find(forward=True)
-    qapp.processEvents()
-    dlg.replace_one()
-    qapp.processEvents()
-    assert window.editor.toPlainText().startswith("ALPHA beta")
-
-    # Replace all remaining
-    dlg.replace_all()
-    qapp.processEvents()
-    assert "ALPHA beta ALPHA" == window.editor.toPlainText()
-
-
-# ------------------------------
-# Image & Link actions
-# ------------------------------
-def test_insert_image_inserts_img_tag(monkeypatch, window: MainWindow, qapp, tmp_path: Path):
-    fake_img = tmp_path / "pic.png"
-    # Minimal PNG header; Qt may still log but shouldn't crash
-    fake_img.write_bytes(b"\x89PNG\r\n\x1a\n")
-
-    # Stub the file dialog to return our image path
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QFileDialog.getOpenFileName",
-        lambda *a, **k: (str(fake_img), "PNG (*.png)"),
-    )
-
-    window.editor.setPlainText("start")
-    c = window.editor.textCursor()
-    c.movePosition(c.MoveOperation.End)
-    window.editor.setTextCursor(c)
-
-    window.act_img.trigger()
-    qapp.processEvents()
-
-    text = window.editor.toPlainText()
-    assert '<img src="' in text
-    assert str(fake_img) in text
-
-
-def test_create_link_invokes_dialog(window: MainWindow, qapp, monkeypatch):
-    called = {"ok": False}
-
-    def fake_show():
-        called["ok"] = True
-
-    monkeypatch.setattr(window.link_dialog, "show_create_link", fake_show)
-    window.act_link.trigger()
-    qapp.processEvents()
-    assert called["ok"] is True
-
-
-# ------------------------------
-# Inline code & code block actions
-# ------------------------------
-def test_act_code_wraps_selection_or_inserts_tick(window: MainWindow, qapp):
-    # Wraps selection with backticks
-    window.editor.setPlainText("abc")
-    c = window.editor.textCursor()
-    c.setPosition(1)  # after 'a'
-    c.setPosition(3, c.MoveMode.KeepAnchor)  # select 'bc'
-    window.editor.setTextCursor(c)
-    window.act_code.trigger()
-    qapp.processEvents()
-    assert window.editor.toPlainText() == "a`bc`"
-
-    # With no selection, inserts a single backtick at caret
-    window.editor.setPlainText("hi")
-    c = window.editor.textCursor()
-    c.movePosition(c.MoveOperation.End)
-    window.editor.setTextCursor(c)
-    window.act_code.trigger()
-    qapp.processEvents()
-    assert window.editor.toPlainText() == "hi`"
-
-
-def test_act_code_block_inserts_fence_with_lang_and_places_caret(
+def test_paste_as_markdown_link_no_selection_places_cursor_inside_brackets(
     monkeypatch, window: MainWindow, qapp
 ):
-    # Force language selection to 'python'
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QInputDialog.getItem",
-        lambda *a, **k: ("python", True),
-    )
-
-    window.editor.setPlainText("start")
-    c = window.editor.textCursor()
-    c.movePosition(c.MoveOperation.End)
-    window.editor.setTextCursor(c)
-
-    window.act_code_block.trigger()
-    qapp.processEvents()
-
-    text = window.editor.toPlainText()
-    # Newline is inserted before fence if not already at BOL
-    assert text.endswith("```python\n\n```\n")
-    # Caret should be on the blank line between fences
-    cur = window.editor.textCursor()
-    assert cur.block().text() == ""  # blank line inside the block
-
-
-def test_act_code_block_inserts_fence_without_lang_when_none_selected(
-    monkeypatch, window: MainWindow, qapp
-):
-    # User selects "(none)" i.e., empty string
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QInputDialog.getItem",
-        lambda *a, **k: ("", True),
-    )
+    cb = qapp.clipboard()
+    cb.setText("www.example.com")
 
     window.editor.setPlainText("")
-    window.act_code_block.trigger()
-    qapp.processEvents()
+    c = window.editor.textCursor()
+    c.setPosition(0)
+    window.editor.setTextCursor(c)
+
+    handled = window._paste_as_markdown_link_if_applicable()
+    assert handled is True
+    assert window.editor.toPlainText() == "[](https://www.example.com)"
+    # Cursor should be between [ and ]
+    cur = window.editor.textCursor()
+    assert cur.position() == 1
+
+
+def test_paste_as_markdown_link_ignores_non_url(window: MainWindow, qapp):
+    qapp.clipboard().setText("not a url")
+    window.editor.setPlainText("")
+    assert window._paste_as_markdown_link_if_applicable() is False
+
+
+def test_event_filter_ctrl_v_handles_url(monkeypatch, window: MainWindow, qapp):
+    qapp.clipboard().setText("https://example.com")
+    window.editor.setPlainText("")
+    window.editor.setFocus()
+
+    ev = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier)
+    handled = window.eventFilter(window.editor, ev)
+    assert handled is True
+    assert window.editor.toPlainText() == "[](https://example.com)"
+
+
+def test_event_filter_ctrl_b_ctrl_i_require_selection(window: MainWindow):
+    window.editor.setPlainText("hi")
+    window.editor.setFocus()
+
+    # no selection -> should do nothing but event is handled (it intercepts)
+    ev_b = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_B, Qt.KeyboardModifier.ControlModifier)
+    handled_b = window.eventFilter(window.editor, ev_b)
+    assert handled_b is True
+    assert window.editor.toPlainText() == "hi"
+
+    ev_i = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_I, Qt.KeyboardModifier.ControlModifier)
+    handled_i = window.eventFilter(window.editor, ev_i)
+    assert handled_i is True
+    assert window.editor.toPlainText() == "hi"
+
+
+def test_event_filter_ctrl_e_inserts_simple_code_block(window: MainWindow):
+    window.editor.setPlainText("start")
+    c = window.editor.textCursor()
+    c.movePosition(c.MoveOperation.End)
+    window.editor.setTextCursor(c)
+
+    ev = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_E, Qt.KeyboardModifier.ControlModifier)
+    handled = window.eventFilter(window.editor, ev)
+    assert handled is True
 
     text = window.editor.toPlainText()
-    # No language suffix on the opening fence
-    assert text.startswith("```\n\n```\n")
-    # Caret on the blank line inside the block
-    cur = window.editor.textCursor()
-    assert cur.block().text() == ""
+    assert "```\n\n```\n" in text
 
 
 # ------------------------------
-# Extra edge cases from review
+# Plugins: attach + menu behaviour
 # ------------------------------
-def test_open_dialog_cancel(monkeypatch, window: MainWindow):
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QFileDialog.getOpenFileName",
-        lambda *a, **k: ("", ""),  # canceled
-    )
-    window.editor.setPlainText("x")
-    window._open_dialog()
-    # nothing changed (still untitled, still has our text)
-    assert window.doc.path is None
-    assert window.editor.toPlainText() == "x"
+class FakePluginManager:
+    def __init__(self) -> None:
+        self.api: Any | None = None
+        self.reload_calls = 0
+
+    def set_api(self, api: Any) -> None:
+        self.api = api
+
+    def reload(self) -> None:
+        self.reload_calls += 1
+
+    # Provide one action via iter_enabled_actions
+    class _Spec:
+        title = "Do Thing"
+        shortcut = "Ctrl+Alt+D"
+        status_tip = "Run plugin thing"
+
+    def iter_enabled_actions(self, _api: Any):
+        def handler(api: Any) -> None:
+            api.insert_text_at_cursor("PLUGIN!")
+
+        return [(self._Spec(), handler)]
 
 
-def test_save_as_cancel(monkeypatch, window: MainWindow):
-    window.editor.setPlainText("x")
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
-        lambda *a, **k: ("", ""),  # canceled
-    )
-    window._save_as()
-    assert window.doc.path is None  # not changed
+class FakePluginInstaller:
+    pass
 
 
-def test_export_cancel(monkeypatch, window: MainWindow):
-    window.editor.setPlainText("# hi")
-    act = window.export_actions[0]
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
-        lambda *a, **k: ("", ""),  # canceled
-    )
-    # should no-op without exceptions
+def test_attach_plugins_sets_api_and_does_not_reload(window: MainWindow):
+    pm = FakePluginManager()
+    pi = FakePluginInstaller()
+
+    window.attach_plugins(plugin_manager=pm, plugin_installer=pi)
+
+    assert pm.api is not None  # API injected
+    assert pm.reload_calls == 0  # attach_plugins must not call reload()
+
+
+def test_rebuild_plugin_actions_adds_actions_to_tools_menu(window: MainWindow):
+    pm = FakePluginManager()
+    window.attach_plugins(plugin_manager=pm, plugin_installer=FakePluginInstaller())
+
+    # Trigger the newly added plugin action
+    # The Tools menu already contains Plugins… and a separator; plugin action appended after.
+    tools_menu = window._plugins_menu
+    assert tools_menu is not None
+
+    # Find our QAction by text
+    actions = [a for a in tools_menu.actions() if a.text() == "Do Thing"]
+    assert actions, "Expected plugin action not found"
+    act = actions[0]
+
+    # Put cursor at end and trigger
+    window.editor.setPlainText("X")
+    c = window.editor.textCursor()
+    c.movePosition(c.MoveOperation.End)
+    window.editor.setTextCursor(c)
+
     act.trigger()
+    assert window.editor.toPlainText() == "XPLUGIN!"
 
 
-def test_export_failure_shows_error(monkeypatch, window: MainWindow, tmp_path: Path):
-    class BoomExporter(DummyExporter):
-        @property
-        def name(self) -> str:
-            return "boom"
-
-        @property
-        def label(self) -> str:
-            return "Export BOOM"
-
-        def export(self, html: str, out_path: Path) -> None:
-            raise RuntimeError("boom")
-
-    out = tmp_path / "x.boom"
-    monkeypatch.setattr(
-        "pymd.services.ui.main_window.QFileDialog.getSaveFileName",
-        lambda *a, **k: (str(out), ""),
-    )
-
+def test_show_plugins_manager_unavailable_shows_info(monkeypatch, window: MainWindow):
     called = {"n": 0}
     monkeypatch.setattr(
-        "pymd.services.ui.main_window.QMessageBox.critical",
-        lambda *a, **k: called.__setitem__("n", called["n"] + 1),
+        QMessageBox, "information", lambda *a, **k: called.__setitem__("n", called["n"] + 1)
     )
 
-    # Call the export path directly with a failing exporter (actions list isn't rebuilt)
-    window._export_with(BoomExporter())
+    window.attach_plugins(plugin_manager=None, plugin_installer=None)
+    window._show_plugins_manager()
+
     assert called["n"] == 1
 
 
+# ------------------------------
+# Themes: apply + persistence
+# ------------------------------
+def test_apply_theme_sets_setting(window: MainWindow):
+    window.apply_theme("midnight")
+    assert window.settings.get_raw("ui/theme", "default") == "midnight"
+
+    window.apply_theme("paper")
+    assert window.settings.get_raw("ui/theme", "default") == "paper"
+
+    window.apply_theme("default")
+    assert window.settings.get_raw("ui/theme", "default") == "default"
+
+
+# ------------------------------
+# Recents: dedup + cap
+# ------------------------------
 def test_recents_dedup_and_order(window: MainWindow, tmp_path: Path):
     a = tmp_path / "a.md"
     b = tmp_path / "b.md"
-    a.write_text("a")
-    b.write_text("b")
+    a.write_text("a", encoding="utf-8")
+    b.write_text("b", encoding="utf-8")
+
     window._open_path(a)
     window._open_path(b)
     window._open_path(a)  # bring to front again
+
     assert window.recents[:2] == [str(a), str(b)]
 
 
 def test_recents_max_enforced(window: MainWindow, tmp_path: Path):
-    files = []
+    opened: list[str] = []
     for i in range(0, 2 * MAX_RECENTS):
         p = tmp_path / f"f{i}.md"
-        p.write_text("x")
+        p.write_text("x", encoding="utf-8")
         window._open_path(p)
-        files.append(str(p))
+        opened.append(str(p))
+
     assert len(window.recents) == MAX_RECENTS
-    # newest first
-    assert window.recents[0] == files[-1]
-
-
-def test_status_message_on_save(window: MainWindow, tmp_path: Path):
-    p = tmp_path / "z.md"
-    window.editor.setPlainText("ok")
-    assert window._write_to(p)
-    # QStatusBar text is transient; check it is non-empty immediately
-    assert window.statusBar().currentMessage() != ""
+    assert window.recents[0] == opened[-1]

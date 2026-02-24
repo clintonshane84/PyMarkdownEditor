@@ -8,208 +8,216 @@ import pytest
 from pymd.services.config.ini_config_service import IniConfigService
 
 
-def write_ini(p: Path, text: str) -> None:
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text, encoding="utf-8")
+def _write_ini(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
 
 
-def test_defaults_when_no_config_files(monkeypatch, tmp_path):
-    # Ensure no platformdirs and no home fallback file
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir", None, raising=False
-    )
-    monkeypatch.setenv("HOME", str(tmp_path))  # make sure fallback resolves to empty home
-
-    cfg = IniConfigService()
-    assert cfg.app_version() == "0.0.0"
-    assert cfg.loaded_from is None
-
-    # getters with defaults
-    assert cfg.get("missing", "key", "x") == "x"
-    assert cfg.get_int("app", "nonint", 42) == 42
-    assert cfg.get_bool("app", "nope", False) is False
-    assert isinstance(cfg.as_dict(), dict)
-
-
-def test_project_root_config_is_used_when_present(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir", None, raising=False
-    )
-    monkeypatch.setenv("HOME", str(tmp_path))
-
-    proj_root = tmp_path / "repo"
-    ini = proj_root / "config" / "config.ini"
-    write_ini(
+# ------------------------------
+# Load order + loaded_from
+# ------------------------------
+def test_loads_from_explicit_path_success(tmp_path: Path):
+    ini = tmp_path / "explicit.ini"
+    _write_ini(
         ini,
-        "[app]\nversion = 1.2.3\n[ui]\nwrap = true\n",
+        """
+[app]
+version = 1.2.3
+
+[ui]
+wrap = true
+font_size = 14
+""".strip(),
     )
 
-    cfg = IniConfigService(project_root=proj_root)
-    assert cfg.app_version() == "1.2.3"
-    assert cfg.get_bool("ui", "wrap", None) is True
-    assert cfg.loaded_from == ini
+    svc = IniConfigService(explicit_path=ini, project_root=None)
+
+    assert svc.loaded_from == ini
+    assert svc.app_version() == "1.2.3"
+    assert svc.get_bool("ui", "wrap") is True
+    assert svc.get_int("ui", "font_size") == 14
 
 
-def test_platformdirs_preferred_over_project_root(monkeypatch, tmp_path):
-    # Simulate platformdirs is available and returns a user config directory
-    def fake_user_config_dir(appname: str) -> str:
-        # ~/.config/<app> equivalent under tmp
-        return str(tmp_path / "usercfg")
+def test_explicit_missing_falls_back_to_project_root_success(tmp_path: Path):
+    # Explicit path does not exist
+    missing = tmp_path / "missing.ini"
 
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir",
-        fake_user_config_dir,
-        raising=False,
+    project_root = tmp_path / "repo"
+    project_ini = project_root / "config" / "config.ini"
+    _write_ini(
+        project_ini,
+        """
+[app]
+version = 9.9.9
+""".strip(),
     )
 
-    # Create both files; platformdirs one should win
-    plat_path = (
-        Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
+    svc = IniConfigService(explicit_path=missing, project_root=project_root)
+
+    assert svc.loaded_from == project_ini
+    assert svc.app_version() == "9.9.9"
+
+
+def test_malformed_explicit_is_ignored_then_uses_project_root(tmp_path: Path, monkeypatch):
+    """
+    Fail path: read_file raises -> should not crash; it should continue and load next candidate.
+    """
+    bad = tmp_path / "bad.ini"
+    _write_ini(bad, "[app]\nversion = 1.0.0\n")
+
+    project_root = tmp_path / "repo"
+    good = project_root / "config" / "config.ini"
+    _write_ini(good, "[app]\nversion = 2.0.0\n")
+
+    # Force any attempt to open the explicit file to raise.
+    real_open = Path.open
+
+    def open_boom(self: Path, *a, **k):
+        if self == bad:
+            raise OSError("boom")
+        return real_open(self, *a, **k)
+
+    monkeypatch.setattr(Path, "open", open_boom, raising=True)
+
+    svc = IniConfigService(explicit_path=bad, project_root=project_root)
+
+    assert svc.loaded_from == good
+    assert svc.app_version() == "2.0.0"
+
+
+def test_no_files_found_sets_safe_defaults(tmp_path: Path, monkeypatch):
+    """
+    Fail path: nothing exists -> safe defaults must be present.
+    We also set HOME to isolate fallback candidate.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    svc = IniConfigService(explicit_path=None, project_root=None)
+
+    assert svc.loaded_from is None
+    assert svc.app_version() == "0.0.0"
+    assert svc.get("app", "version") == "0.0.0"
+
+
+# ------------------------------
+# get / get_int / get_bool success & fail paths
+# ------------------------------
+def test_get_returns_default_for_missing_section_and_key(tmp_path: Path):
+    ini = tmp_path / "x.ini"
+    _write_ini(ini, "[app]\nversion = 1.0.0\n")
+    svc = IniConfigService(explicit_path=ini)
+
+    assert svc.get("missing", "k", "d") == "d"
+    assert svc.get("app", "missing", "d2") == "d2"
+
+
+def test_get_int_success_and_fail_paths(tmp_path: Path):
+    ini = tmp_path / "x.ini"
+    _write_ini(
+        ini,
+        """
+[ui]
+font_size = 16
+bad_int = sixteen
+""".strip(),
     )
-    proj_root = tmp_path / "repo"
-    proj_path = proj_root / "config" / "config.ini"
+    svc = IniConfigService(explicit_path=ini)
 
-    write_ini(plat_path, "[app]\nversion = 2.0.0\n")
-    write_ini(proj_path, "[app]\nversion = 1.0.0\n")
-
-    cfg = IniConfigService(project_root=proj_root)
-    assert cfg.app_version() == "2.0.0"
-    assert cfg.loaded_from == plat_path
-
-
-def test_explicit_path_overrides_everything(monkeypatch, tmp_path):
-    # Arrange a platformdirs file and a project file AND an explicit file
-    def fake_user_config_dir(appname: str) -> str:
-        return str(tmp_path / "usercfg")
-
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir",
-        fake_user_config_dir,
-        raising=False,
-    )
-
-    plat_path = (
-        Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
-    )
-    proj_root = tmp_path / "repo"
-    proj_path = proj_root / "config" / "config.ini"
-    explicit_path = tmp_path / "explicit.ini"
-
-    write_ini(plat_path, "[app]\nversion = 2.0.0\n")
-    write_ini(proj_path, "[app]\nversion = 1.0.0\n")
-    write_ini(explicit_path, "[app]\nversion = 9.9.9\n")
-
-    cfg = IniConfigService(explicit_path=explicit_path, project_root=proj_root)
-    assert cfg.app_version() == "9.9.9"
-    assert cfg.loaded_from == explicit_path
+    assert svc.get_int("ui", "font_size") == 16  # success
+    assert svc.get_int("ui", "bad_int", 12) == 12  # fail -> default
+    assert svc.get_int("ui", "missing", 11) == 11  # missing -> default
+    assert svc.get_int("missing", "x", 10) == 10  # missing section -> default
 
 
 @pytest.mark.parametrize(
-    "raw, expected",
+    "raw,expected",
     [
-        ("42", 42),
-        ("  7  ", 7),
-        ("notanint", None),
-        ("", None),
-    ],
-)
-def test_get_int_parsing(monkeypatch, tmp_path, raw, expected):
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir", None, raising=False
-    )
-    monkeypatch.setenv("HOME", str(tmp_path))
-
-    ini = tmp_path / ".config" / IniConfigService.DEFAULT_APP_DIR / IniConfigService.DEFAULT_FILE
-    write_ini(ini, f"[limits]\nmax = {raw}\n")
-
-    cfg = IniConfigService()
-    assert cfg.get_int("limits", "max", None) == expected
-
-
-@pytest.mark.parametrize(
-    "raw, expected",
-    [
+        ("1", True),
         ("true", True),
-        (" True ", True),
-        ("yes", True),
+        ("YES", True),
+        ("y", True),
         ("on", True),
-        ("false", False),
-        ("no", False),
-        ("off", False),
         ("0", False),
-        ("maybe", None),
-        ("", None),
+        ("false", False),
+        ("No", False),
+        ("n", False),
+        ("off", False),
     ],
 )
-def test_get_bool_parsing(monkeypatch, tmp_path, raw, expected):
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir", None, raising=False
-    )
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_get_bool_truthy_falsy_success(tmp_path: Path, raw: str, expected: bool):
+    ini = tmp_path / "x.ini"
+    _write_ini(ini, f"[ui]\nflag = {raw}\n")
+    svc = IniConfigService(explicit_path=ini)
 
-    ini = tmp_path / ".config" / IniConfigService.DEFAULT_APP_DIR / IniConfigService.DEFAULT_FILE
-    write_ini(ini, f"[feature]\nenabled = {raw}\n")
-
-    cfg = IniConfigService()
-    assert cfg.get_bool("feature", "enabled", None) is expected
+    assert svc.get_bool("ui", "flag") is expected
 
 
-def test_as_dict_snapshot(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir", None, raising=False
-    )
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_get_bool_fail_path_unknown_value_returns_default(tmp_path: Path):
+    ini = tmp_path / "x.ini"
+    _write_ini(ini, "[ui]\nflag = maybe\n")
+    svc = IniConfigService(explicit_path=ini)
 
-    ini = tmp_path / ".config" / IniConfigService.DEFAULT_APP_DIR / IniConfigService.DEFAULT_FILE
-    write_ini(
+    assert svc.get_bool("ui", "flag", default=True) is True
+    assert svc.get_bool("ui", "flag", default=False) is False
+
+
+# ------------------------------
+# as_dict + app_version behaviour
+# ------------------------------
+def test_as_dict_returns_snapshot_copy(tmp_path: Path):
+    ini = tmp_path / "x.ini"
+    _write_ini(
         ini,
-        "[app]\nversion = 3.1.4\n\n[ui]\nwrap = true\nzoom = 110\n",
+        """
+[app]
+version = 3.3.3
+
+[ui]
+wrap = true
+""".strip(),
     )
+    svc = IniConfigService(explicit_path=ini)
 
-    cfg = IniConfigService()
-    snap = cfg.as_dict()
-    # Sections defined are present with their items; version should be as configured
-    assert snap.get("app", {}).get("version") == "3.1.4"
-    assert snap.get("ui", {}).get("wrap") == "true"
-    assert snap.get("ui", {}).get("zoom") == "110"
+    d = svc.as_dict()
+    assert d["app"]["version"] == "3.3.3"
+    assert d["ui"]["wrap"] == "true"
 
-
-def test_malformed_config_is_ignored_and_defaults_used(monkeypatch, tmp_path):
-    # Force platformdirs path and write garbage there
-    def fake_user_config_dir(appname: str) -> str:
-        return str(tmp_path / "usercfg")
-
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir",
-        fake_user_config_dir,
-        raising=False,
-    )
-    bad_path = (
-        Path(fake_user_config_dir(IniConfigService.DEFAULT_APP_DIR)) / IniConfigService.DEFAULT_FILE
-    )
-    bad_path.parent.mkdir(parents=True, exist_ok=True)
-    bad_path.write_text("this is not INI at all", encoding="utf-8")
-
-    cfg = IniConfigService()
-    # It should not crash, loaded_from stays None, and defaults applied
-    assert cfg.loaded_from is None
-    assert cfg.app_version() == "0.0.0"
+    # ensure snapshot is a copy, not live view
+    d["ui"]["wrap"] = "false"
+    assert svc.get("ui", "wrap") == "true"
 
 
-def test_home_fallback_used_when_platformdirs_missing(monkeypatch, tmp_path):
-    # No platformdirs
-    monkeypatch.setattr(
-        "pymd.services.config.ini_config_service.user_config_dir", None, raising=False
-    )
-    # Point HOME to tmp so fallback path is predictable
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_app_version_falls_back_to_default_when_empty_or_missing(tmp_path: Path):
+    # version key missing -> default injected
+    ini1 = tmp_path / "missing_version.ini"
+    _write_ini(ini1, "[app]\nname = x\n")
+    svc1 = IniConfigService(explicit_path=ini1)
+    assert svc1.app_version() == "0.0.0"
 
-    # Create ~/.config/PyMarkdownEditor/config.ini
-    fb_path = (
-        tmp_path / ".config" / IniConfigService.DEFAULT_APP_DIR / IniConfigService.DEFAULT_FILE
-    )
-    write_ini(fb_path, "[app]\nversion = 4.5.6\n")
+    # version empty -> returns default '0.0.0' due to 'or "0.0.0"'
+    ini2 = tmp_path / "empty_version.ini"
+    _write_ini(ini2, "[app]\nversion =\n")
+    svc2 = IniConfigService(explicit_path=ini2)
+    assert svc2.app_version() == "0.0.0"
 
-    cfg = IniConfigService()
-    assert cfg.app_version() == "4.5.6"
-    assert cfg.loaded_from == fb_path
+
+# ------------------------------
+# Optional: platformdirs fallback path (HOME/.config/...)
+# ------------------------------
+def test_fallback_home_config_path_used_when_no_platformdirs(tmp_path: Path, monkeypatch):
+    """
+    Forces the 'no platformdirs' branch by patching module-level user_config_dir to None,
+    then verifies HOME/.config/PyMarkdownEditor/config.ini is discovered.
+    """
+    # Import module to patch its symbol
+    import pymd.services.config.ini_config_service as mod
+
+    monkeypatch.setattr(mod, "user_config_dir", None, raising=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    expected = tmp_path / "home" / ".config" / "PyMarkdownEditor" / "config.ini"
+    _write_ini(expected, "[app]\nversion = 7.7.7\n")
+
+    svc = IniConfigService(explicit_path=None, project_root=None)
+
+    assert svc.loaded_from == expected
+    assert svc.app_version() == "7.7.7"

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import QSettings
 
 from pymd.domain.interfaces import (
+    IAppConfig,
     IExporterRegistry,
     IFileService,
     IMarkdownRenderer,
@@ -11,6 +14,7 @@ from pymd.domain.interfaces import (
 from pymd.plugins.manager import PluginManager
 from pymd.plugins.pip_installer import QtPipInstaller
 from pymd.plugins.state import SettingsPluginStateStore
+from pymd.services.config.app_config import build_app_config
 from pymd.services.exporters import WebEnginePdfExporter
 from pymd.services.exporters.base import ExporterRegistryInst
 from pymd.services.exporters.html_exporter import HtmlExporter
@@ -50,12 +54,22 @@ class Container:
         qsettings: QSettings | None = None,
         dialogs: object | None = None,
         messages: object | None = None,
+        *,
+        app_config: IAppConfig | None = None,
+        explicit_ini: Path | None = None,
+        project_root: Path | None = None,
     ) -> None:
         # Core services (defaults if not supplied)
         self.renderer: IMarkdownRenderer = renderer or MarkdownRenderer()
         self.file_service: IFileService = files or FileService()
         self.settings_service: ISettingsService = settings or SettingsService(
             qsettings or QSettings()
+        )
+
+        # NEW: App config (version + ini-backed config surface)
+        self.app_config: IAppConfig = app_config or build_app_config(
+            explicit_ini=explicit_ini,
+            project_root=project_root,
         )
 
         # Exporter registry instance (per-instance; test-friendly)
@@ -140,9 +154,6 @@ class Container:
     # ---------- UI factories ----------
 
     def build_main_presenter(self, view) -> object:
-        """
-        Create a MainPresenter bound to a view (if presenter layer is available).
-        """
         if MainPresenter is None:  # pragma: no cover
             raise RuntimeError("Presenter layer is not available in this build.")
 
@@ -173,12 +184,12 @@ class Container:
             renderer=self.renderer,
             file_service=self.file_service,
             settings=self.settings_service,
+            config=self.app_config,  # ✅ NEW
             exporter_registry=self.exporter_registry,
             start_path=start_path,
             app_title=app_title,
         )
 
-        # --- Plugins wiring (consistent + deterministic) ---
         self._attach_plugins_to_window(window)
 
         # Attach presenter if available
@@ -188,13 +199,9 @@ class Container:
                 if hasattr(window, "attach_presenter"):
                     window.attach_presenter(presenter)  # type: ignore[attr-defined]
         except Exception:
-            # Presenter layer optional; ignore failures here.
             pass
 
         return window
-
-
-# --- Convenience function (parity with prior API) ----------------------------
 
 
 def build_main_window(
