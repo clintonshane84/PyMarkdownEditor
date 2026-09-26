@@ -1,0 +1,3 @@
+[submodule "aidlc-framework"]
+	path = aidlc-framework
+	url = git@github.com:clintonshane84/aidlc-framework.git
